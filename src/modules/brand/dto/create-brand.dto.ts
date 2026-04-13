@@ -1,19 +1,36 @@
-import { IsNotEmpty, IsString, IsOptional, IsMongoId } from 'class-validator';
+import {
+  IsArray,
+  IsMongoId,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MinLength,
+} from 'class-validator';
 
 export class CreateBrandDto {
-  @IsNotEmpty()
   @IsString()
+  @IsNotEmpty()
+  @MinLength(2)
   name: string;
-
-  @IsNotEmpty()
-  @IsString()
-  logo: string;
 
   @IsOptional()
   @IsString()
   description?: string;
 
-  @IsNotEmpty()
-  @IsMongoId()
-  sellerId: string;
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @IsOptional()
+  @IsUrl()
+  website?: string;
+
+  @IsOptional()
+  logo?: object;
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  categories?: string[];
 }

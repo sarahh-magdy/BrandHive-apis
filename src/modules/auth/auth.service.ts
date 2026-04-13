@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { CustomerRepository } from '@models/index';
+import { CustomerRepository, UserRepository } from '@models/index';
 import { ConfigService } from '@nestjs/config';
 import { Customer } from './entities/auth.entity';
 import { sendMail } from '@common/helpers';
@@ -12,6 +12,7 @@ export class AuthService {
   constructor(
     private readonly configService: ConfigService,
     private readonly customerRepository: CustomerRepository,
+    private readonly userRepository: UserRepository,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -57,7 +58,7 @@ export class AuthService {
 
 //LOGIN SERVICE
   async login(loginDto: LoginDto) {
-    const customerExist = await this.customerRepository.getOne({ email: loginDto.email });
+    const customerExist = await this.userRepository.getOne({ email: loginDto.email });
     if (!customerExist) {
       throw new UnauthorizedException('Customer does not exist');
     }

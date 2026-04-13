@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, IsDate, MinLength, MaxLength } from "class-validator";
+import { IsString, IsEmail, IsNotEmpty, IsDate, MinLength, MaxLength, IsOptional } from "class-validator";
 import { Transform } from "class-transformer";
 
 export class RegisterDto {
@@ -19,5 +19,9 @@ export class RegisterDto {
     @Transform(({ value }) => {return new Date(value);})   
     @IsDate()
     dob: Date;
+    
+    @IsString()
+    @IsOptional()
+    role: string;
 }
 

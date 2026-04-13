@@ -53,7 +53,7 @@ export class AuthGuard implements CanActivate {
         seller: this.sellerRepository,
       };
 
-      const repo = repoMap[payload.role];
+      const repo = repoMap[payload.role.toLowerCase()];
 
       if (!repo) {
         throw new UnauthorizedException('Invalid role');
@@ -71,6 +71,7 @@ export class AuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
+      console.error('Auth guard error:', error);
       throw new UnauthorizedException('Token expired or invalid');
     }
   }

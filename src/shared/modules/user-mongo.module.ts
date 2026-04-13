@@ -3,6 +3,7 @@ import {
     SellerRepository, 
     AdminRepository, 
     CustomerRepository, 
+    UserRepository,
     User, 
     userSchema, 
     Seller, 
@@ -31,12 +32,13 @@ import { MongooseModule } from "@nestjs/mongoose";
         SellerRepository,
         AdminRepository, 
         CustomerRepository, 
+        UserRepository
     ],
     exports: [
         SellerRepository,
         AdminRepository, 
         CustomerRepository, 
-        //UserRepository
+        UserRepository
     ]
 })
 export class UserMongoModule {}

@@ -15,7 +15,7 @@ export class AuthFactoryService {
         customer.dob = registerDto.dob;
         customer.otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
         customer.isVerified = false;
-
+        (customer as any).role = registerDto.role || 'Customer';
         return customer;
     } 
 }

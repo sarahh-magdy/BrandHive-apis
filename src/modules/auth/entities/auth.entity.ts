@@ -9,4 +9,5 @@ export class Customer {
     otp: string;
     otpExpiry: Date;
     isVerified: boolean;
+    role: string;
 }

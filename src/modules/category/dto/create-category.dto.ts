@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, MinLength } from "class-validator";
+import { IsNotEmpty, IsOptional, IsString, MinLength, IsObject } from "class-validator";
 
 export class CreateCategoryDto {
     @IsString()
@@ -8,5 +8,6 @@ export class CreateCategoryDto {
     
     // TODO: Add validation for logo
     @IsOptional()
-    logo?: object;
+    @IsObject()
+    logo: Record<string, any>;
 }

@@ -28,6 +28,9 @@ export class Customer {
 
     @Prop({ type: Date })
     dob: Date;
+
+
+
 }
  
 export const customerSchema = SchemaFactory.createForClass(Customer);
