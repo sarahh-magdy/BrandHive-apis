@@ -12,19 +12,19 @@ import devConfig from './config/env/dev.config';
 import { CustomerModule } from './modules/customer/customer.module';
 import { AuthGuard } from '@common/guards/auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
+
 import { UserMongoModule } from '@shared/index';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
+    ConfigModule.forRoot({  
+      load: [devConfig], 
       isGlobal: true,
-      envFilePath: '.env',
-      load: [devConfig],
     }),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        uri: configService.get('database.url'),
+        uri: configService.get('database').url,
       }),
     }),
     UserMongoModule, 
