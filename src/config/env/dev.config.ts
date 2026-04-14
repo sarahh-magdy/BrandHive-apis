@@ -5,10 +5,10 @@ export default () => ({
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
   },
-  cloud:{
+  cloud: {
     apiKey: process.env.CLOUD_API_KEY,
   },
-  access:{
+  access: {
     jwt_secret: process.env.JWT_SECRET,
   },
 });
