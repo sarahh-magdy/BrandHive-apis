@@ -2,20 +2,22 @@ import { RegisterDto } from "../dto/register.dto";
 import * as bcrypt from 'bcrypt';
 import { generateOtp } from "src/common/helpers";
 import { Injectable } from "@nestjs/common";
-import { Customer } from "../entities/auth.entity";
+import { User } from "@models/index";
 
 @Injectable()
 export class AuthFactoryService {
-    async createCustomer(registerDto: RegisterDto) {
-        const customer = new Customer();
-        customer.userName = registerDto.userName;
-        customer.email = registerDto.email;
-        customer.password = await bcrypt.hash(registerDto.password, 10);
-        customer.otp = generateOtp();
-        customer.dob = registerDto.dob;
-        customer.otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-        customer.isVerified = false;
-        (customer as any).role = registerDto.role || 'Customer';
-        return customer;
-    } 
+  async createUser(registerDto: RegisterDto) {
+    const user = new User();
+
+    user.userName = registerDto.userName;
+    user.email = registerDto.email;
+    user.password = await bcrypt.hash(registerDto.password, 10);
+    user.otp = generateOtp();
+    user.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    user.isVerified = false;
+    user.dob = registerDto.dob;
+    user.role = 'customer';
+
+    return user;
+  }
 }

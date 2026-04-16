@@ -2,35 +2,42 @@ import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Types } from "mongoose";
 
 @Schema({
-    timestamps: true,
-    discriminatorKey: 'role',
-    toJSON: {
-        virtuals: true
-    },
-  
+  timestamps: true,
+  toJSON: { virtuals: true }
 })
 export class User {
-    readonly _id: Types.ObjectId;
-    @Prop({type: String , required: true})
-    userName: string;
-    
-    @Prop({type: String , required: true , unique: true})
-    email: string;
-    
-    @Prop({type: String , required: true})
-    password: string;
-    
-    @Prop({type: String})
-    otp: string;
-    
-    @Prop({type: Date})
-    otpExpiry: Date;
+  readonly _id: Types.ObjectId;
 
-    @Prop({type: Boolean, default: false})
-    isVerified: boolean;
+  @Prop({ required: true })
+  userName: string;
 
-    @Prop({type: Boolean, default: false})
-    isConfirmed: boolean;
- }
- 
-export const userSchema = SchemaFactory.createForClass(User);
+  @Prop({ required: true, unique: true })
+  email: string;
+
+  @Prop({ required: true })
+  password: string;
+
+  @Prop({
+    type: String,
+    enum: ['customer', 'seller', 'admin'],
+    default: 'customer'
+  })
+  role: string;
+
+  @Prop()
+  otp: string;
+
+  @Prop()
+  otpExpiry: Date;
+
+  @Prop({ default: false })
+  isVerified: boolean;
+
+  @Prop()
+  dob: Date;
+
+  @Prop()
+  whatsappLink: string;
+}
+
+export const UserSchema = SchemaFactory.createForClass(User);

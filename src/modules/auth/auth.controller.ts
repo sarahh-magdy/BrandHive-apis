@@ -1,56 +1,70 @@
-import { Controller, Post, Body, Get, Patch, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Patch,
+  Get,
+  Req,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
-import { AuthFactoryService } from './factory';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ConfirmEmailDto } from './dto/confirm-email.dto';
+import { AuthFactoryService } from './factory';
 import { AuthGuard } from '@common/guards/auth.guard';
+import { RolesGuard } from '@common/guards/roles.guard';
 import { Public } from '@common/decorators/public.decorator';
+import { Roles } from '@common/decorators/roles.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly authFactoryService: AuthFactoryService
+    private readonly authFactoryService: AuthFactoryService,
   ) {}
 
-//REGISTER
+  //  REGISTER 
   @Public()
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
-    const customer = await this.authFactoryService.createCustomer(registerDto);
-    const createdCustomer = await this.authService.register(customer);
-    return { message: 'Customer registered successfully', success: true, data: createdCustomer };
+    const user = await this.authFactoryService.createUser(registerDto);
+    return await this.authService.register(user);
   }
 
-//CONFIRM EMAIL
+  // CONFIRM EMAIL 
   @Public()
   @Post('confirm-email')
   @HttpCode(HttpStatus.OK)
-  async confirmEmail(@Body() body: { email: string; otp: string }) {
-    const result = await this.authService.confirmEmail(body.email, body.otp);
-    return { success: true, ...result };
+  async confirmEmail(@Body() dto: ConfirmEmailDto) {
+    return await this.authService.confirmEmail(dto.email, dto.otp);
   }
 
-//LOGIN
+  // LOGIN
   @Public()
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     const token = await this.authService.login(loginDto);
-    return { message: 'Customer logged in successfully', success: true, data: { token } };
+    return {
+      message: 'Logged in successfully',
+      data: { token },
+    };
   }
 
-//LOGOUT
-  @Public()
+  // LOGOUT
   @Post('logout')
-  @UseGuards(AuthGuard) 
+  @UseGuards(AuthGuard)
   async logout(@Req() req) {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
-    return this.authService.logout(token);
+    return await this.authService.logout(token);
   }
 
-//FORGOT PASSWORD
+  // FORGOT PASSWORD
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
@@ -58,15 +72,18 @@ export class AuthController {
     return await this.authService.forgotPassword(email);
   }
 
-//VERIFY RESET CODE
+  // VERIFY RESET CODE
   @Public()
   @Post('verify-reset-code')
   @HttpCode(HttpStatus.OK)
   async verifyResetCode(@Body() body: { email: string; otp: string }) {
-    return await this.authService.verifyResetCode(body.email, body.otp);
+    return await this.authService.verifyResetCode(
+      body.email,
+      body.otp,
+    );
   }
 
-//RESET PASSWORD
+  // RESET PASSWORD
   @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
@@ -74,28 +91,55 @@ export class AuthController {
     return await this.authService.resetPassword(
       resetPasswordDto.email,
       resetPasswordDto.otp,
-      resetPasswordDto.newPass
+      resetPasswordDto.newPass,
     );
   }
 
-//UPDATE PASSWORD
+  // UPDATE PASSWORD
   @Patch('update-password')
   @UseGuards(AuthGuard)
-  async updatePassword(@Req() req, @Body() body: { oldPass: string; newPass: string }) {
-    return await this.authService.updateLoggedUserPassword(req.user._id, body.oldPass, body.newPass);
+  async updatePassword(
+    @Req() req,
+    @Body() body: { oldPass: string; newPass: string },
+  ) {
+    return await this.authService.updateLoggedUserPassword(
+      req.user._id,
+      body.oldPass,
+      body.newPass,
+    );
   }
 
-//UPDATE PROFILE
+  // UPDATE PROFILE
   @Patch('update-profile')
   @UseGuards(AuthGuard)
   async updateProfile(@Req() req, @Body() updateData: any) {
-    return await this.authService.updateLoggedUserData(req.user._id, updateData);
+    return await this.authService.updateLoggedUserData(
+      req.user._id,
+      updateData,
+    );
   }
 
-//GET ALL USERS 
+  // GET USERS (ADMIN ONLY)
   @Get('users')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, RolesGuard)
+@Roles(['admin'])
   async getAllUsers() {
-    return { message: "This would return all users (Admin only logic)" };
+    return { message: 'Only admin can access this' };
+  }
+
+  // MAKE ADMIN
+  @Patch('make-admin/:id')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(['admin'])
+  async makeAdmin(@Param('id') id: string) {
+    return await this.authService.makeAdmin(id);
+  }
+
+  // APPROVE SELLER
+  @Patch('make-seller/:id')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(['admin'])
+  async makeSeller(@Param('id') id: string) {
+    return await this.authService.makeSeller(id);
   }
 }
