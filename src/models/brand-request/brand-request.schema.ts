@@ -28,6 +28,10 @@ export class BrandRequest {
   @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   requestedBy: Types.ObjectId;
 
+  // ─── NEW: مطلوب للـ seller account لما الـ request يتـ approve ───
+  @Prop({ type: String, required: true })
+  whatsappLink: string;
+
   @Prop({
     type: String,
     enum: BrandRequestStatus,

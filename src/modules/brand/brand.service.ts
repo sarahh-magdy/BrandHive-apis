@@ -8,7 +8,6 @@ import { Types } from 'mongoose';
 import { BrandRepository } from '../../models/brand/brand.repository';
 import { BrandRequestRepository } from '../../models/brand-request/brand-request.repository';
 import { BrandFactoryService } from './factory';
-// ─── FIXED: import BrandRequestStatus من الـ entity مش من مكان تاني
 import { Brand } from './entities/brand.entity';
 import { BrandRequestStatus } from './entities/brand-reruest.entity';
 import { CreateBrandDto } from './dto/create-brand.dto';
@@ -18,6 +17,8 @@ import { RequestBrandDto } from './dto/request-brand.dto';
 import { RejectBrandDto } from './dto/reject-brand.dto';
 import { UpdateBrandStatsDto } from './dto/update-brand-stats.dto';
 import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
+// ─── NEW: أضفنا AuthService عشان نعمل seller account عند الـ approve
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class BrandService {
@@ -26,6 +27,8 @@ export class BrandService {
     private readonly brandRequestRepository: BrandRequestRepository,
     private readonly brandFactoryService: BrandFactoryService,
     private readonly cloudinaryService: CloudinaryService,
+    // ─── NEW: inject AuthService ─────────────────────────────────
+    private readonly authService: AuthService,
   ) {}
 
   // ─── Create Brand ─────────────────────────────────────────────
@@ -71,7 +74,6 @@ export class BrandService {
   // ─── Update Brand ─────────────────────────────────────────────
   async updateBrand(id: string, dto: UpdateBrandDto, user: any, logoFile?: Express.Multer.File) {
     const updates = await this.brandFactoryService.updateBrand(id, dto, user, logoFile);
-
     if (updates.slug) await this.checkSlugConflict(updates.slug, id);
 
     const updated = await this.brandRepository.updateOne(
@@ -134,13 +136,12 @@ export class BrandService {
 
     const pendingRequest = await this.brandRequestRepository.getOne({
       name: { $regex: new RegExp(`^${dto.name}$`, 'i') },
-      // ─── FIXED: BrandRequestStatus بييجي من الـ entity ────────
       status: BrandRequestStatus.PENDING,
     });
     if (pendingRequest) throw new ConflictException('A pending request for this brand already exists');
 
     const request = await this.brandFactoryService.createBrandRequest(dto, user, logoFile);
-    return this.brandRequestRepository.create({ ...request } as any);
+    return this.brandRequestRepository.create({ ...request, whatsappLink: dto.whatsappLink }as any);
   }
 
   // ─── Find All Requests ────────────────────────────────────────
@@ -162,7 +163,6 @@ export class BrandService {
   async approveBrand(requestId: string, user: any) {
     const request = await this.brandRequestRepository.getOne({
       _id: new Types.ObjectId(requestId),
-      // ─── FIXED: BrandRequestStatus بييجي من الـ entity ────────
       status: BrandRequestStatus.PENDING,
     });
     if (!request) throw new NotFoundException('Pending brand request not found');
@@ -170,13 +170,33 @@ export class BrandService {
     const slug = (request as any).name.toLowerCase().trim().replace(/\s+/g, '-');
     await this.checkSlugConflict(slug);
 
+    // ─── Create the brand ─────────────────────────────────────
     const brand = this.brandFactoryService.buildBrandFromRequest(request as any, user);
-    const createdBrand = await this.brandRepository.create({ ...brand } as any);
+    const createdBrand = await this.brandRepository.create({ ...brand }as any);
 
+    // ─── NEW: Create seller account for the requester ─────────
+    // الـ flow: Customer → requestBrand → Admin approves → Customer becomes Seller
+    // بنـ populate الـ requestedBy عشان نجيب الـ email
+    const populatedRequest = await this.brandRequestRepository.getOne({
+      _id: new Types.ObjectId(requestId),
+    });
+
+    const requesterEmail = (populatedRequest as any)?.requestedBy?.email;
+    const requesterName = (populatedRequest as any)?.requestedBy?.userName;
+    const whatsappLink = (populatedRequest as any)?.whatsappLink;
+
+    if (requesterEmail) {
+      await this.authService.createSellerFromRequest({
+        name: requesterName || 'Seller',
+        email: requesterEmail,
+        whatsappLink: whatsappLink || '',
+      });
+    }
+
+    // ─── Update request status ────────────────────────────────
     await this.brandRequestRepository.updateOne(
       { _id: new Types.ObjectId(requestId) },
       {
-        // ─── FIXED: BrandRequestStatus بييجي من الـ entity ──────
         status: BrandRequestStatus.APPROVED,
         reviewedBy: user._id,
         reviewedAt: new Date(),
@@ -191,7 +211,6 @@ export class BrandService {
   async rejectBrand(requestId: string, dto: RejectBrandDto, user: any) {
     const request = await this.brandRequestRepository.getOne({
       _id: new Types.ObjectId(requestId),
-      // ─── FIXED: BrandRequestStatus بييجي من الـ entity ────────
       status: BrandRequestStatus.PENDING,
     });
     if (!request) throw new NotFoundException('Pending brand request not found');
@@ -203,7 +222,6 @@ export class BrandService {
     return this.brandRequestRepository.updateOne(
       { _id: new Types.ObjectId(requestId) },
       {
-        // ─── FIXED: BrandRequestStatus بييجي من الـ entity ──────
         status: BrandRequestStatus.REJECTED,
         rejectionReason: dto.rejectionReason,
         reviewedBy: user._id,
@@ -234,7 +252,7 @@ export class BrandService {
     );
   }
 
-  // ─── Private Helpers ──────────────────────────────────────────
+  // ─── Private ──────────────────────────────────────────────────
   private async checkSlugConflict(slug: string, excludeId?: string) {
     const filter: Record<string, any> = { slug, isDeleted: false };
     if (excludeId) filter._id = { $ne: new Types.ObjectId(excludeId) };

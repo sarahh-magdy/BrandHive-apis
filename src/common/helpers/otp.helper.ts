@@ -1,3 +1,3 @@
-export const generateOtp = () =>{
-    return Math.ceil(Math.random() * 9999 + 10000) as unknown as string;
-}
+export const generateOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};

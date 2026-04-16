@@ -33,4 +33,10 @@ export class RequestBrandDto {
   @IsArray()
   @IsMongoId({ each: true })
   categories?: string[];
+
+  // ─── NEW: مطلوب عشان لما الـ request يتـ approve يتعمل seller account
+  // الـ whatsappLink بيبقى جزء من الـ seller profile
+  @IsString()
+  @IsNotEmpty()
+  whatsappLink: string;
 }
