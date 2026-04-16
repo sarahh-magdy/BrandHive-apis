@@ -1,124 +1,100 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Patch,
-  HttpCode,
-  HttpStatus,
-} from '@nestjs/common';
-
+import { Controller, Post, Body, Get, Patch, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { RegisterDto } from './dto/register.dto';
+import { AuthFactoryService } from './factory';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { UpdatePasswordDto } from './dto/update-password.dto';
-import { RegisterDto } from './dto/register.dto';
-import { ConfirmEmailDto } from './dto/confirm-email.dto';
-import { Public } from '@common/decorators/public.decorator';
-import { Auth } from '@common/decorators/auth.decorator';
-import { User } from '@common/decorators/user.decorator';
-
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { Public } from '../../common/decorators/public.decorator';
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly authFactoryService: AuthFactoryService
+  ) {}
 
-  // ─── REGISTER ─────────────────────────────────────────────────
+//REGISTER
   @Public()
   @Post('register')
   async register(@Body() registerDto: RegisterDto) {
-    const result = await this.authService.register(registerDto);
-    return {
-      success: true,
-      message: 'Registration successful. Please check your email for OTP.',
-      data: result,
-    };
+    const customer = await this.authFactoryService.createCustomer(registerDto);
+    const createdCustomer = await this.authService.register(customer);
+    return { message: 'Customer registered successfully', success: true, data: createdCustomer };
   }
 
-  // ─── CONFIRM EMAIL ────────────────────────────────────────────
+//CONFIRM EMAIL
   @Public()
   @Post('confirm-email')
   @HttpCode(HttpStatus.OK)
-  // ✅ استخدمنا ConfirmEmailDto بدل raw body عشان validation يشتغل
-  async confirmEmail(@Body() body: ConfirmEmailDto) {
-    return this.authService.confirmEmail(body.email, body.otp);
+  async confirmEmail(@Body() body: { email: string; otp: string }) {
+    const result = await this.authService.confirmEmail(body.email, body.otp);
+    return { success: true, ...result };
   }
 
-  // ─── RESEND OTP ───────────────────────────────────────────────
-  @Public()
-  @Post('resend-otp')
-  async resendOtp(@Body('email') email: string) {
-    return this.authService.resendOtp(email);
-  }
-
-  // ─── LOGIN ────────────────────────────────────────────────────
+//LOGIN
   @Public()
   @Post('login')
-  @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto) {
     const token = await this.authService.login(loginDto);
-    return {
-      success: true,
-      message: 'Logged in successfully',
-      data: { token },
-    };
+    return { message: 'Customer logged in successfully', success: true, data: { token } };
   }
 
-  // ─── LOGOUT ───────────────────────────────────────────────────
-  // ✅ استخدمنا @Auth بدل @UseGuards عشان يكون consistent مع باقي الكود
+//LOGOUT
+  @Public()
   @Post('logout')
-  @Auth(['Customer', 'Seller', 'Admin'])
-  @HttpCode(HttpStatus.OK)
-  async logout(@User('token') token: string) {
+  @UseGuards(AuthGuard) 
+  async logout(@Req() req) {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
     return this.authService.logout(token);
   }
 
-  // ─── FORGOT PASSWORD ──────────────────────────────────────────
+//FORGOT PASSWORD
   @Public()
   @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
   async forgotPassword(@Body('email') email: string) {
-    return this.authService.forgotPassword(email);
+    return await this.authService.forgotPassword(email);
   }
 
-  // ─── VERIFY RESET CODE ────────────────────────────────────────
+//VERIFY RESET CODE
   @Public()
   @Post('verify-reset-code')
   @HttpCode(HttpStatus.OK)
-  async verifyResetCode(@Body() body: ConfirmEmailDto) {
-    return this.authService.verifyResetCode(body.email, body.otp);
+  async verifyResetCode(@Body() body: { email: string; otp: string }) {
+    return await this.authService.verifyResetCode(body.email, body.otp);
   }
 
-  // ─── RESET PASSWORD ───────────────────────────────────────────
+//RESET PASSWORD
   @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto.email, dto.otp, dto.newPass);
-  }
-
-  // ─── UPDATE PASSWORD ──────────────────────────────────────────
-  // ✅ استخدمنا @Auth و @User decorator بدل @UseGuards و @Req
-  @Patch('update-password')
-  @Auth(['Customer', 'Seller', 'Admin'])
-  async updatePassword(
-    @User('_id') userId: string,
-    @User('role') role: string,
-    @Body() dto: UpdatePasswordDto,
-  ) {
-    return this.authService.updateLoggedUserPassword(
-      userId,
-      dto.oldPass,
-      dto.newPass,
-      role,
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return await this.authService.resetPassword(
+      resetPasswordDto.email,
+      resetPasswordDto.otp,
+      resetPasswordDto.newPass
     );
   }
 
-  // ─── UPDATE PROFILE ───────────────────────────────────────────
+//UPDATE PASSWORD
+  @Patch('update-password')
+  @UseGuards(AuthGuard)
+  async updatePassword(@Req() req, @Body() body: { oldPass: string; newPass: string }) {
+    return await this.authService.updateLoggedUserPassword(req.user._id, body.oldPass, body.newPass);
+  }
+
+//UPDATE PROFILE
   @Patch('update-profile')
-  @Auth(['Customer', 'Seller', 'Admin'])
-  async updateProfile(
-    @User('_id') userId: string,
-    @User('role') role: string,
-    @Body() updateData: any,
-  ) {
-    return this.authService.updateLoggedUserData(userId, updateData, role);
+  @UseGuards(AuthGuard)
+  async updateProfile(@Req() req, @Body() updateData: any) {
+    return await this.authService.updateLoggedUserData(req.user._id, updateData);
+  }
+
+//GET ALL USERS 
+  @Get('users')
+  @UseGuards(AuthGuard)
+  async getAllUsers() {
+    return { message: "This would return all users (Admin only logic)" };
   }
 }

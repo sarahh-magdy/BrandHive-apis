@@ -185,13 +185,13 @@ export class BrandService {
     const requesterName = (populatedRequest as any)?.requestedBy?.userName;
     const whatsappLink = (populatedRequest as any)?.whatsappLink;
 
-    if (requesterEmail) {
-      await this.authService.createSellerFromRequest({
-        name: requesterName || 'Seller',
-        email: requesterEmail,
-        whatsappLink: whatsappLink || '',
-      });
-    }
+    // if (requesterEmail) {
+    //   await this.authService.createSellerFromRequest({
+    //     name: requesterName || 'Seller',
+    //     email: requesterEmail,
+    //     whatsappLink: whatsappLink || '',
+    //   });
+    // }
 
     // ─── Update request status ────────────────────────────────
     await this.brandRequestRepository.updateOne(
