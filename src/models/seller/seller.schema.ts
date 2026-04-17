@@ -18,4 +18,4 @@ export class Seller {
     whatsappLink: string;
 }
 
-export const SellerSchema = SchemaFactory.createForClass(Seller);
+export const sellerSchema = SchemaFactory.createForClass(Seller);

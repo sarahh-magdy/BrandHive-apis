@@ -15,4 +15,4 @@ export class Admin {
     password: string;
 }
  
-export const AdminSchema = SchemaFactory.createForClass(Admin);
+export const adminSchema = SchemaFactory.createForClass(Admin);
