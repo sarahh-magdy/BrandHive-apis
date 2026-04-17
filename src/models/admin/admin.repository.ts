@@ -6,7 +6,7 @@ import { Model } from "mongoose";
 
 @Injectable()
 export class AdminRepository extends AbstractRepository<Admin> {
-    constructor(@InjectModel(Admin.name) adminModel: Model<Admin>) {
-        super(adminModel);
-    }
+  constructor(@InjectModel(Admin.name) adminModel: Model<Admin>) {
+    super(adminModel);
+  }
 }

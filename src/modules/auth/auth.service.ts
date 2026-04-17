@@ -3,11 +3,10 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { CustomerRepository } from '../../models/customer/customer.repository';
-import { UserRepository } from '../../models/common/user.repository';
+import { CustomerRepository, UserRepository } from '@models/index';
 import { ConfigService } from '@nestjs/config';
 import { Customer } from './entities/auth.entity';
-import { sendMail } from '../../common/helpers/send-mail.helper';
+import { sendMail } from '@common/helpers';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -21,44 +20,30 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  // REGISTER SERVICE
   async register(customer: Customer) {
-    const customerExist = await this.customerRepository.getOne({
+    const exists = await this.customerRepository.getOne({
       email: customer.email,
     });
 
-    if (customerExist) {
+    if (exists) {
       throw new ConflictException('Customer already exists');
     }
 
-    // Generate OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const created = await this.customerRepository.create(customer);
 
-    customer.otp = otp;
-    customer.otpExpiry = otpExpiry;
+    await sendMail({
+      from: this.configService.get('EMAIL_USER'),
+      to: customer.email,
+      subject: 'Confirm your email - Brand Hive',
+      html: `<h3>Your OTP is : ${customer.otp}</h3>`,
+    });
 
-    const createdCustomer = await this.customerRepository.create(customer);
+    const { password, otp, otpExpiry, ...safe } =
+      JSON.parse(JSON.stringify(created));
 
-    // Send email safely
-    try {
-      await sendMail({
-        from: this.configService.get('EMAIL_USER'),
-        to: customer.email,
-        subject: 'Confirm your email - Brand Hive',
-        html: `<h3>Your OTP is : ${otp}</h3>`,
-      });
-    } catch (err) {
-      console.log('REGISTER EMAIL ERROR:', err);
-    }
-
-    const { password, otp: _, otpExpiry: __, ...customerobj } =
-      JSON.parse(JSON.stringify(createdCustomer));
-
-    return customerobj as Customer;
+    return safe as Customer;
   }
 
-  // CONFIRM EMAIL SERVICE
   async confirmEmail(email: string, otp: string) {
     const customer = await this.customerRepository.getOne({ email });
 
@@ -82,7 +67,7 @@ export class AuthService {
         email: customer.email,
       },
       {
-        secret: this.configService.get('JWT_SECRET') || 'fallback_secret',
+        secret: this.configService.get('JWT_SECRET'),
         expiresIn: '1d',
       },
     );
@@ -90,19 +75,18 @@ export class AuthService {
     return { message: 'Email confirmed successfully', token };
   }
 
-  // LOGIN SERVICE
   async login(loginDto: LoginDto) {
-    const customerExist = await this.customerRepository.getOne({
+    const customer = await this.userRepository.getOne({
       email: loginDto.email,
     });
 
-    if (!customerExist) {
+    if (!customer) {
       throw new UnauthorizedException('Customer does not exist');
     }
 
     const match = await bcrypt.compare(
       loginDto.password,
-      customerExist.password,
+      customer.password,
     );
 
     if (!match) {
@@ -111,12 +95,12 @@ export class AuthService {
 
     const token = this.jwtService.sign(
       {
-        _id: customerExist._id,
+        _id: customer._id,
         role: 'customer',
-        email: customerExist.email,
+        email: customer.email,
       },
       {
-        secret: this.configService.get('JWT_SECRET') || 'fallback_secret',
+        secret: this.configService.get('JWT_SECRET'),
         expiresIn: '1d',
       },
     );
@@ -124,7 +108,6 @@ export class AuthService {
     return token;
   }
 
-  // LOGOUT SERVICE
   async logout(token: string) {
     return {
       success: true,
@@ -132,7 +115,6 @@ export class AuthService {
     };
   }
 
-  // FORGOT PASSWORD SERVICE
   async forgotPassword(email: string) {
     const customer = await this.customerRepository.getOne({ email });
 
@@ -147,21 +129,16 @@ export class AuthService {
 
     await this.customerRepository.update({ email }, { otp, otpExpiry });
 
-    try {
-      await sendMail({
-        from: this.configService.get('EMAIL_USER'),
-        to: email,
-        subject: 'Reset Your Password - Brand Hive',
-        html: `<h3>Your password reset code is: <b>${otp}</b></h3>`,
-      });
-    } catch (err) {
-      console.log('FORGOT PASSWORD EMAIL ERROR:', err);
-    }
+    await sendMail({
+      from: this.configService.get('EMAIL_USER'),
+      to: email,
+      subject: 'Reset Your Password - Brand Hive',
+      html: `<h3>Your password reset code is: <b>${otp}</b></h3>`,
+    });
 
     return { message: 'Reset code sent successfully' };
   }
 
-  // VERIFY RESET CODE SERVICE
   async verifyResetCode(email: string, otp: string) {
     const customer = await this.customerRepository.getOne({ email });
 
@@ -169,12 +146,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    return {
-      message: 'OTP is valid. You can now reset your password.',
-    };
+    return { message: 'OTP is valid. You can now reset your password.' };
   }
 
-  // RESET PASSWORD SERVICE
   async resetPassword(email: string, otp: string, newPass: string) {
     const customer = await this.customerRepository.getOne({ email });
 
@@ -182,17 +156,16 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    const hashedPass = await bcrypt.hash(newPass, 10);
+    const hashed = await bcrypt.hash(newPass, 10);
 
     await this.customerRepository.update(
       { email },
-      { password: hashedPass, otp: null, otpExpiry: null },
+      { password: hashed, otp: null, otpExpiry: null },
     );
 
     return { message: 'Password has been reset successfully' };
   }
 
-  // UPDATE PASSWORD (LOGGED USER)
   async updateLoggedUserPassword(
     customerId: string,
     oldPass: string,
@@ -202,45 +175,43 @@ export class AuthService {
       _id: customerId,
     });
 
-    const isMatch = await bcrypt.compare(
+    const match = await bcrypt.compare(
       oldPass,
       customer?.password || '',
     );
 
-    if (!isMatch) {
+    if (!match) {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
-    const hashedPass = await bcrypt.hash(newPass, 10);
+    const hashed = await bcrypt.hash(newPass, 10);
 
     await this.customerRepository.update(
       { _id: customerId },
-      { password: hashedPass },
+      { password: hashed },
     );
 
     return { message: 'Password updated successfully' };
   }
 
-  // UPDATE PROFILE
   async updateLoggedUserData(
     customerId: string,
     updateData: Partial<Customer>,
   ) {
-    const { password, otp, otpExpiry, ...cleanData } =
-      updateData as any;
+    const { password, otp, otpExpiry, ...clean } = updateData as any;
 
-    const updatedCustomer = await this.customerRepository.update(
+    const updated = await this.customerRepository.update(
       { _id: customerId },
-      cleanData,
+      clean,
     );
 
-    if (!updatedCustomer) {
+    if (!updated) {
       throw new UnauthorizedException('Customer not found');
     }
 
     return {
       message: 'Profile updated successfully',
-      data: updatedCustomer,
+      data: updated,
     };
   }
 }
