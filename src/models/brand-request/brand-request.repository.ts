@@ -1,34 +1,69 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { QueryFilter, Model } from 'mongoose';
-import { AbstractRepository } from '../abstract.repository';
-import { BrandRequest } from './brand-request.schema';
+import { Model, QueryFilter, UpdateQuery, Types } from 'mongoose';
+import { BrandRequest, BrandRequestDocument } from './brand-request.schema';
 
 @Injectable()
-export class BrandRequestRepository extends AbstractRepository<BrandRequest> {
+export class BrandRequestRepository {
   constructor(
     @InjectModel(BrandRequest.name)
-    private readonly brandRequestModel: Model<BrandRequest>,
-  ) {
-    super(brandRequestModel);
+    private readonly model: Model<BrandRequestDocument>,
+  ) {}
+
+  // ─── CREATE ─────────────────────────────
+  async create(data: Partial<BrandRequest>): Promise<BrandRequestDocument> {
+    return this.model.create(data);
   }
 
+  // ─── GET ONE (بديل getOne) ─────────────
+  async getOne(filter: QueryFilter<BrandRequestDocument>) {
+    return this.model.findOne(filter).exec();
+  }
+
+  // ─── UPDATE ONE ─────────────────────────
+  async updateOne(
+    filter: QueryFilter<BrandRequestDocument>,
+    update: UpdateQuery<BrandRequestDocument>,
+    options: any = { new: true },
+  ) {
+    return this.model.findOneAndUpdate(filter, update, options).exec();
+  }
+
+  // ─── PAGINATION ─────────────────────────
   async findWithPagination(
-    filter: QueryFilter<BrandRequest>,
+    filter: QueryFilter<BrandRequestDocument>,
     options: { skip: number; limit: number },
   ) {
-    return this.brandRequestModel
+    return this.model
       .find(filter)
-      .populate('requestedBy', 'name email')
-      .populate('reviewedBy', 'name email')
-      .populate('categories', 'name slug')
       .skip(options.skip)
       .limit(options.limit)
-      .lean()
       .exec();
   }
 
-  async countDocuments(filter: QueryFilter<BrandRequest>): Promise<number> {
-    return this.brandRequestModel.countDocuments(filter).exec();
+  // ─── COUNT ──────────────────────────────
+  async countDocuments(filter: QueryFilter<BrandRequestDocument>) {
+    return this.model.countDocuments(filter);
+  }
+
+  // ─── OPTIONAL (existing methods) ────────
+  async findById(id: string) {
+    return this.model.findById(id).populate('userId').exec();
+  }
+
+  async findByUserId(userId: string) {
+    return this.model
+      .findOne({ userId: new Types.ObjectId(userId) })
+      .exec();
+  }
+
+  async findAll(filter: QueryFilter<BrandRequestDocument> = {}) {
+    return this.model.find(filter).populate('userId').exec();
+  }
+
+  async updateById(id: string, update: UpdateQuery<BrandRequestDocument>) {
+    return this.model
+      .findByIdAndUpdate(id, update, { new: true })
+      .exec();
   }
 }

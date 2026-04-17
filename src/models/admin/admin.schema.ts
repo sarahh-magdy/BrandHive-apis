@@ -1,18 +1,25 @@
-import { Schema , SchemaFactory } from "@nestjs/mongoose";
-import { Types } from "mongoose";
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument, Types } from "mongoose";
+
+export type AdminDocument = HydratedDocument<Admin>;
 
 @Schema({
     timestamps: true,
     discriminatorKey: 'role',
-    toJSON: {
-        virtuals: true
-    }
+    toJSON: { virtuals: true }
 })
 export class Admin {
-    readonly _id: Types.ObjectId;
+
+    @Prop()
     userName: string;
+
+    @Prop({ unique: true })
     email: string;
+
+    @Prop()
     password: string;
+
+    readonly _id: Types.ObjectId;
 }
- 
-export const adminSchema = SchemaFactory.createForClass(Admin);
+
+export const AdminSchema = SchemaFactory.createForClass(Admin);

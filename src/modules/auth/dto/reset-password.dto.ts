@@ -1,20 +1,45 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  MinLength,
+  MaxLength,
+  Matches,
+  Length,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
+
+export class ForgetPasswordDto {
+  @IsEmail()
+  @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
+}
+
+export class VerifyResetCodeDto {
+  @IsEmail()
+  @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @Length(6, 6, { message: 'OTP must be exactly 6 digits' })
+  otp: string;
+}
 
 export class ResetPasswordDto {
   @IsEmail()
   @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
-  @IsString()
   @IsNotEmpty()
-  otp: string;
-
   @IsString()
-  @IsNotEmpty()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
-  @MaxLength(20)
+  @MinLength(8)
+  @MaxLength(32)
   @Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'Password is too weak (Must contain uppercase, lowercase, and number/special char)',
+    message: 'Password must contain uppercase, lowercase, and number',
   })
-  newPass: string;
+  newPassword: string;
 }

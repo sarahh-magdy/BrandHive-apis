@@ -1,16 +1,22 @@
-import { IsNotEmpty, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  MinLength,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 
 export class UpdatePasswordDto {
-  @IsString()
   @IsNotEmpty()
-  oldPass: string;  
+  @IsString()
+  oldPassword: string;
 
-  @IsString()
   @IsNotEmpty()
-  @MinLength(8, { message: 'New password must be at least 8 characters long' })
-  @MaxLength(20)
+  @IsString()
+  @MinLength(8)
+  @MaxLength(32)
   @Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message: 'New password is too weak',
+    message: 'Password must contain uppercase, lowercase, and number',
   })
-  newPass: string; 
+  newPassword: string;
 }

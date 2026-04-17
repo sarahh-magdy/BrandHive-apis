@@ -4,75 +4,55 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { SellerRepository } from '../../models/seller/seller.repository';
-import { CustomerRepository } from '../../models/customer/customer.repository';
-import { PUBLIC } from '../decorators/public.decorator';
+import { JwtService } from '@nestjs/jwt';
+import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { UserRepository } from '../../models/common/user.repository';
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-    private readonly customerRepository: CustomerRepository,
-    private readonly sellerRepository: SellerRepository,
     private readonly reflector: Reflector,
+    private readonly userRepository: UserRepository,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) return true;
+
+    const request = context.switchToHttp().getRequest();
+    const token = this.extractToken(request);
+
+    if (!token) {
+      throw new UnauthorizedException('Access token is missing');
+    }
+
     try {
-      const isPublic = this.reflector.get<boolean>(
-        PUBLIC,
-        context.getHandler(),
-      );
-      if (isPublic) return true;
-
-      const request = context.switchToHttp().getRequest();
-
-//CHECK AUTHORIZATION HEADER
-      const authHeader = request.headers.authorization;
-      if (!authHeader) {
-        throw new UnauthorizedException('No token provided');
-      }
-
-      const token = authHeader.split(' ')[1];
-
-//VERIFY TOKEN      
-      const payload = this.jwtService.verify<{
-        _id: string;
-        email: string;
-        role: string;
-      }>(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: process.env.JWT_SECRET,
       });
 
-//MAPPING ROLES TO REPOSITORIES
-      const repoMap = {
-        customer: this.customerRepository,
-        seller: this.sellerRepository,
-      };
-
-      const repo = repoMap[payload.role.toLowerCase()];
-
-      if (!repo) {
-        throw new UnauthorizedException('Invalid role');
+      const user = await this.userRepository.findById(payload.sub);
+      if (!user || !user.isActive) {
+        throw new UnauthorizedException('User not found or inactive');
       }
 
-//FIND USER
-      const user = await repo.getOne({ _id: payload._id });
-
-      if (!user) {
-        throw new UnauthorizedException('User not found');
-      }
-
-//ATTACH USER TO REQUEST
       request.user = user;
-
       return true;
-    } catch (error) {
-      console.error('Auth guard error:', error);
-      throw new UnauthorizedException('Token expired or invalid');
+    } catch {
+      throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+
+  private extractToken(request: any): string | null {
+    const authHeader = request.headers.authorization;
+    if (!authHeader) return null;
+    const [type, token] = authHeader.split(' ');
+    return type === 'Bearer' ? token : null;
   }
 }

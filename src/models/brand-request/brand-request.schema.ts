@@ -1,55 +1,33 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { SchemaTypes, Types } from 'mongoose';
-import { BrandRequestStatus } from '../../modules/brand/entities/brand-reruest.entity';
+import { Document, Types } from 'mongoose';
+
+export type BrandRequestDocument = BrandRequest & Document;
+
+export enum BrandRequestStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+}
 
 @Schema({ timestamps: true })
 export class BrandRequest {
-  @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
-  readonly _id: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId: Types.ObjectId;
 
-  @Prop({ type: String, required: true, trim: true })
-  name: string;
+  @Prop({ required: true })
+  storeName: string;
 
-  @Prop({ type: String, trim: true, default: null })
-  description: string;
+  @Prop()
+  businessInfo: string;
 
-  @Prop({ type: String, trim: true, default: null })
-  country: string;
+  @Prop({ required: true })
+  phone: string;
 
-  @Prop({ type: String, trim: true, default: null })
-  website: string;
-
-  @Prop({ type: Object, default: null })
-  logo: object;
-
-  @Prop({ type: [{ type: SchemaTypes.ObjectId, ref: 'Category' }], default: [] })
-  categories: Types.ObjectId[];
-
-  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
-  requestedBy: Types.ObjectId;
-
-  // ─── NEW: مطلوب للـ seller account لما الـ request يتـ approve ───
-  @Prop({ type: String, required: true })
-  whatsappLink: string;
-
-  @Prop({
-    type: String,
-    enum: BrandRequestStatus,
-    default: BrandRequestStatus.PENDING,
-  })
+  @Prop({ enum: BrandRequestStatus, default: BrandRequestStatus.PENDING })
   status: BrandRequestStatus;
 
-  @Prop({ type: String, default: null })
+  @Prop()
   rejectionReason: string;
-
-  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', default: null })
-  reviewedBy: Types.ObjectId;
-
-  @Prop({ type: Date, default: null })
-  reviewedAt: Date;
 }
 
 export const BrandRequestSchema = SchemaFactory.createForClass(BrandRequest);
-
-BrandRequestSchema.index({ status: 1 });
-BrandRequestSchema.index({ requestedBy: 1 });

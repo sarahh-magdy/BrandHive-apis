@@ -1,100 +1,120 @@
-import { Controller, Post, Body, Get, Patch, HttpCode, HttpStatus, UseGuards, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
-import { AuthFactoryService } from './factory';
 import { LoginDto } from './dto/login.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
-import { AuthGuard } from '../../common/guards/auth.guard';
+import { ConfirmEmailDto } from './dto/confirm-email.dto';
+import {
+  ForgetPasswordDto,
+  VerifyResetCodeDto,
+  ResetPasswordDto,
+} from './dto/reset-password.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
+import { ResendOtpDto } from './dto/resend-otp.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { User } from '../../common/decorators/user.decorator';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly authFactoryService: AuthFactoryService
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
-//REGISTER
+  // POST /auth/register
   @Public()
   @Post('register')
-  async register(@Body() registerDto: RegisterDto) {
-    const customer = await this.authFactoryService.createCustomer(registerDto);
-    const createdCustomer = await this.authService.register(customer);
-    return { message: 'Customer registered successfully', success: true, data: createdCustomer };
+  @HttpCode(HttpStatus.CREATED)
+  register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
-//CONFIRM EMAIL
+  // POST /auth/confirm-email
   @Public()
   @Post('confirm-email')
   @HttpCode(HttpStatus.OK)
-  async confirmEmail(@Body() body: { email: string; otp: string }) {
-    const result = await this.authService.confirmEmail(body.email, body.otp);
-    return { success: true, ...result };
+  confirmEmail(@Body() dto: ConfirmEmailDto) {
+    return this.authService.confirmEmail(dto);
   }
 
-//LOGIN
+  // POST /auth/resend-otp
+  @Public()
+  @Post('resend-otp')
+  @HttpCode(HttpStatus.OK)
+  resendOtp(@Body() dto: ResendOtpDto) {
+    return this.authService.resendOtp(dto);
+  }
+
+  // POST /auth/login
   @Public()
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
-    const token = await this.authService.login(loginDto);
-    return { message: 'Customer logged in successfully', success: true, data: { token } };
-  }
-
-//LOGOUT
-  @Public()
-  @Post('logout')
-  @UseGuards(AuthGuard) 
-  async logout(@Req() req) {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(' ')[1];
-    return this.authService.logout(token);
-  }
-
-//FORGOT PASSWORD
-  @Public()
-  @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  async forgotPassword(@Body('email') email: string) {
-    return await this.authService.forgotPassword(email);
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
   }
 
-//VERIFY RESET CODE
+  // POST /auth/logout
+  @UseGuards(AuthGuard)
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout(@User('_id') userId: string) {
+    return this.authService.logout(userId.toString());
+  }
+
+  // POST /auth/refresh
+  @Public()
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  refresh(@Body() dto: RefreshTokenDto) {
+    return this.authService.refreshTokens(dto.userId, dto.refreshToken);
+  }
+
+  // POST /auth/forget-password
+  @Public()
+  @Post('forget-password')
+  @HttpCode(HttpStatus.OK)
+  forgetPassword(@Body() dto: ForgetPasswordDto) {
+    return this.authService.forgetPassword(dto);
+  }
+
+  // POST /auth/verify-reset-code
   @Public()
   @Post('verify-reset-code')
   @HttpCode(HttpStatus.OK)
-  async verifyResetCode(@Body() body: { email: string; otp: string }) {
-    return await this.authService.verifyResetCode(body.email, body.otp);
+  verifyResetCode(@Body() dto: VerifyResetCodeDto) {
+    return this.authService.verifyResetCode(dto);
   }
 
-//RESET PASSWORD
+  // PATCH /auth/reset-password
   @Public()
-  @Post('reset-password')
+  @Patch('reset-password')
   @HttpCode(HttpStatus.OK)
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return await this.authService.resetPassword(
-      resetPasswordDto.email,
-      resetPasswordDto.otp,
-      resetPasswordDto.newPass
-    );
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 
-//UPDATE PASSWORD
-  @Patch('update-password')
+  // PATCH /auth/change-password
   @UseGuards(AuthGuard)
-  async updatePassword(@Req() req, @Body() body: { oldPass: string; newPass: string }) {
-    return await this.authService.updateLoggedUserPassword(req.user._id, body.oldPass, body.newPass);
+  @Patch('change-password')
+  @HttpCode(HttpStatus.OK)
+  changePassword(
+    @User('_id') userId: string,
+    @Body() dto: UpdatePasswordDto,
+  ) {
+    return this.authService.changePassword(userId.toString(), dto);
   }
 
-//UPDATE PROFILE
-  @Patch('update-profile')
+  // GET /auth/me
   @UseGuards(AuthGuard)
-  async updateProfile(@Req() req, @Body() updateData: any) {
-    return await this.authService.updateLoggedUserData(req.user._id, updateData);
-  }
-
-//GET ALL USERS 
-  @Get('users')
-  @UseGuards(AuthGuard)
-  async getAllUsers() {
-    return { message: "This would return all users (Admin only logic)" };
+  @Get('me')
+  getProfile(@User('_id') userId: string) {
+    return this.authService.getProfile(userId.toString());
   }
 }

@@ -1,21 +1,21 @@
-import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { Types } from "mongoose";
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
 
-@Schema({
-    timestamps: true,
-    discriminatorKey: 'role',
-    toJSON: {
-        virtuals: true
-    }
-})   
+export type SellerDocument = Seller & Document;
+
+@Schema({ timestamps: true })
 export class Seller {
-    readonly _id: Types.ObjectId;
-    userName: string;
-    email: string;
-    password: string;
+  @Prop({ required: true })
+  storeName: string;
 
-    @Prop({ type: String, required: true })
-    whatsappLink: string;
+  @Prop()
+  businessInfo: string;
+
+  @Prop()
+  storePhone: string;
+
+  @Prop({ default: true })
+  isStoreActive: boolean;
 }
 
-export const sellerSchema = SchemaFactory.createForClass(Seller);
+export const SellerSchema = SchemaFactory.createForClass(Seller);

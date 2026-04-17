@@ -1,27 +1,30 @@
-import { IsString, IsEmail, IsNotEmpty, IsDate, MinLength, MaxLength, IsOptional } from "class-validator";
-import { Transform } from "class-transformer";
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  MinLength,
+  MaxLength,
+  Matches,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class RegisterDto {
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(2)
-    @MaxLength(20)
-    userName: string;
-    
-    @IsEmail()
-    @IsNotEmpty()
-    email: string;
-    
-    @IsString()
-    @IsNotEmpty()
-    password: string;   
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(50)
+  name: string;
 
-    @Transform(({ value }) => {return new Date(value);})   
-    @IsDate()
-    dob: Date;
-    
-    @IsString()
-    @IsOptional()
-    role: string;
+  @IsEmail()
+  @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
+
+  @IsNotEmpty()
+  @IsString()
+  @MinLength(8)
+  @MaxLength(32)
+  @Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
+    message: 'Password must contain uppercase, lowercase, and number',
+  })
+  password: string;
 }
-
