@@ -1,4 +1,5 @@
-import * as nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
+sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
 interface MailOptions {
   to: string;
@@ -6,37 +7,25 @@ interface MailOptions {
   html: string;
 }
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER!,
-    pass: process.env.EMAIL_PASSWORD!,
-  },
-  family: 4,
-  tls: {
-    rejectUnauthorized: false,
-  },
-} as nodemailer.TransportOptions); // 👈 الحل هنا
-
 export async function sendMail(options: MailOptions): Promise<void> {
-  console.log('📨 Trying to send email...');
+  console.log('📨 Sending email via SendGrid...');
 
   try {
-    const info = await transporter.sendMail({
-      from: `"BrandHive" <${process.env.EMAIL_USER}>`,
+    await sgMail.send({
       to: options.to,
+      from: process.env.EMAIL_USER!, // لازم يتعمله verify
       subject: options.subject,
       html: options.html,
     });
 
-    console.log('✅ Email sent:', info.response);
+    console.log('✅ Email sent successfully');
   } catch (error) {
-    console.error('❌ Email FULL ERROR:', error);
+    console.error('❌ SendGrid error:', error.response?.body || error);
     throw error;
   }
 }
+
+// template زي ما هو
 export function otpEmailTemplate(
   otp: string,
   type: 'verify' | 'reset' = 'verify',
@@ -50,7 +39,7 @@ export function otpEmailTemplate(
       : 'Use the OTP below to reset your password. It expires in 10 minutes.';
 
   return `
-    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px;">
+    <div style="font-family: Arial; max-width: 500px; margin: auto;">
       <h2>${title}</h2>
       <p>${message}</p>
       <h1 style="letter-spacing: 8px;">${otp}</h1>
