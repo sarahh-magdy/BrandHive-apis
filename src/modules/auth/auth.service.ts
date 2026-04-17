@@ -24,15 +24,21 @@ export class AuthService {
     }
     const createdCustomer = await this.customerRepository.create(customer);
 
+    try {
     await sendMail({
       from: this.configService.get('EMAIL_USER'),
       to: customer.email,
       subject: 'Confirm your email - Brand Hive',
       html: `<h3>Your OTP is : ${customer.otp}</h3>`,
     });
-    const { password, otp, otpExpiry, ...customerobj } = JSON.parse(JSON.stringify(createdCustomer));
-    return customerobj as Customer;
+  } catch (error) {
+    console.error('Mail sending failed:', error);
   }
+
+  const { password, otp, otpExpiry, ...customerobj } = JSON.parse(JSON.stringify(createdCustomer));
+  return customerobj as Customer;
+}
+  
 //CONFIRM EMAIL SERVICE
   async confirmEmail(email: string, otp: string) {
     const customer = await this.customerRepository.getOne({ email });

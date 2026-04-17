@@ -1,17 +1,21 @@
+// common/helpers/send-mail.helper.ts
 import * as nodemailer from 'nodemailer';
 
-export async function sendMail(mailOptions: nodemailer.SendMailOptions) {
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',  
-    port: 587,               
-    secure: false,          
+export const sendMail = async (options) => {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail', // أو الـ host لو بتستخدمي شركة تانية
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS, // الـ App Password هنا
     },
-    tls: {
-        rejectUnauthorized: false
-    }
-});
-        await transporter.sendMail(mailOptions);
-    }
+  });
+
+  const mailOptions = {
+    from: options.from,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+  };
+
+  return await transporter.sendMail(mailOptions);
+};
