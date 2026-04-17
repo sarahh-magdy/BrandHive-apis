@@ -7,31 +7,36 @@ interface MailOptions {
 }
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
+    user: process.env.EMAIL_USER!,
+    pass: process.env.EMAIL_PASSWORD!,
   },
-});
+  family: 4,
+  tls: {
+    rejectUnauthorized: false,
+  },
+} as nodemailer.TransportOptions); // 👈 الحل هنا
 
-// 📧 Send Mail Function
 export async function sendMail(options: MailOptions): Promise<void> {
+  console.log('📨 Trying to send email...');
+
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"BrandHive" <${process.env.EMAIL_USER}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,
     });
 
-    console.log('📧 Email sent successfully to:', options.to);
+    console.log('✅ Email sent:', info.response);
   } catch (error) {
-    console.error('❌ Email sending failed:', error?.message || error);
+    console.error('❌ Email FULL ERROR:', error);
     throw error;
   }
 }
-
-// ✉️ OTP Email Template
 export function otpEmailTemplate(
   otp: string,
   type: 'verify' | 'reset' = 'verify',
@@ -45,25 +50,10 @@ export function otpEmailTemplate(
       : 'Use the OTP below to reset your password. It expires in 10 minutes.';
 
   return `
-    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-      <h2 style="color:#333;">${title}</h2>
-      <p style="color:#555;">${message}</p>
-
-      <div style="
-        margin: 20px 0;
-        padding: 15px;
-        background: #f4f4f4;
-        text-align: center;
-        font-size: 30px;
-        letter-spacing: 8px;
-        font-weight: bold;
-      ">
-        ${otp}
-      </div>
-
-      <p style="color:#999; font-size:12px;">
-        If you did not request this, ignore this email.
-      </p>
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px;">
+      <h2>${title}</h2>
+      <p>${message}</p>
+      <h1 style="letter-spacing: 8px;">${otp}</h1>
     </div>
   `;
 }
