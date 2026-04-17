@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { CustomerRepository } from '../../models/customer/customer.repository';
+import { CustomerRepository } from '@models/index';
 import { UserRepository } from '../../models/common/user.repository';
 import { ConfigService } from '@nestjs/config';
 import { Customer } from './entities/auth.entity';
