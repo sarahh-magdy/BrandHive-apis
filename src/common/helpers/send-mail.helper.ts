@@ -3,11 +3,15 @@ import * as nodemailer from 'nodemailer';
 export const sendMail = async (options: { from: string; to: string; subject: string; html: string }) => {
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // true لـ port 465
+    port: 587, // تم التغيير لـ 587 ليتوافق مع سياسات الـ Hosting
+    secure: false, // يجب أن تكون false عند استخدام Port 587 (STARTTLS)
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // تأكدي أنه App Password
+      pass: process.env.EMAIL_PASS, // تأكدي أنه App Password المكون من 16 حرف
+    },
+    tls: {
+      // لتجنب مشاكل شهادات الأمان (Certificates) على السيرفرات الخارجية
+      rejectUnauthorized: false,
     },
   });
 
@@ -23,7 +27,12 @@ export const sendMail = async (options: { from: string; to: string; subject: str
     console.log('✅ Email Sent Successfully: %s', info.messageId);
     return info;
   } catch (error: any) {
-    console.error('❌ Nodemailer Error:', error.message);
+    // طباعة الخطأ بشكل مفصل في الـ Logs لمعرفة السبب الحقيقي لو فشل الإرسال
+    console.error('❌ Nodemailer Error Detail:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+    });
     throw error;
   }
 };
