@@ -51,17 +51,18 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const otp = generateOtp();
+    const hashedOtp = await bcrypt.hash(otp, 10);
     const otpExpires = getOtpExpiry(10);
 
     const user = await this.userRepository.create({
-      name: dto.name,
-      email: dto.email,
-      password: hashedPassword,
-      role: UserRole.CUSTOMER,
-      otp,
-      otpExpires,
-      isEmailVerified: false,
-    });
+  name: dto.name,
+  email: dto.email,
+  password: hashedPassword,
+  role: UserRole.CUSTOMER,
+  otp: hashedOtp,
+  otpExpires,
+  isEmailVerified: false,
+});
 
     try {
       await sendMail({
@@ -164,11 +165,12 @@ export class AuthService {
       );
     }
 
-    const otp = generateOtp();
-    const otpExpires = getOtpExpiry(10);
+const otp = generateOtp();
+const hashedOtp = await bcrypt.hash(otp, 10);
+const otpExpires = getOtpExpiry(10);
 
     await this.userRepository.updateById(user._id.toString(), {
-      otp,
+      otp: hashedOtp,
       otpExpires,
       otpAttempts: 0,
     });
@@ -272,11 +274,12 @@ export class AuthService {
     if (!user)
       throw new NotFoundException('User not found');
 
-    const otp = generateOtp();
-    const otpExpires = getOtpExpiry(10);
+const otp = generateOtp();
+const hashedOtp = await bcrypt.hash(otp, 10);
+const otpExpires = getOtpExpiry(10);
 
     await this.userRepository.updateById(user._id.toString(), {
-      resetPasswordOtp: otp,
+      resetPasswordOtp: hashedOtp,
       resetPasswordOtpExpires: otpExpires,
       resetPasswordVerified: false,
     });
