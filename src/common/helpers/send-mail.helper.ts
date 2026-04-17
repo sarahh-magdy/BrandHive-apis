@@ -1,12 +1,13 @@
-// common/helpers/send-mail.helper.ts
 import * as nodemailer from 'nodemailer';
 
-export const sendMail = async (options) => {
+export const sendMail = async (options: { from: string; to: string; subject: string; html: string }) => {
   const transporter = nodemailer.createTransport({
-    service: 'gmail', // أو الـ host لو بتستخدمي شركة تانية
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // true لـ port 465
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // الـ App Password هنا
+      pass: process.env.EMAIL_PASS, // تأكدي أنه App Password
     },
   });
 
@@ -17,5 +18,12 @@ export const sendMail = async (options) => {
     html: options.html,
   };
 
-  return await transporter.sendMail(mailOptions);
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email Sent Successfully: %s', info.messageId);
+    return info;
+  } catch (error: any) {
+    console.error('❌ Nodemailer Error:', error.message);
+    throw error;
+  }
 };

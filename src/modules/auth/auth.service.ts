@@ -7,6 +7,7 @@ import { sendMail } from '../../common/helpers/send-mail.helper';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -16,37 +17,41 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-//REGISTER SERVICE
+  // REGISTER SERVICE
   async register(customer: Customer) {
     const customerExist = await this.customerRepository.getOne({ email: customer.email });
     if (customerExist) {
       throw new ConflictException('Customer already exists');
     }
+
     const createdCustomer = await this.customerRepository.create(customer);
 
     try {
-    await sendMail({
-      from: this.configService.get('EMAIL_USER'),
-      to: customer.email,
-      subject: 'Confirm your email - Brand Hive',
-      html: `<h3>Your OTP is : ${customer.otp}</h3>`,
-    });
-  } catch (error) {
-    console.error('Mail sending failed:', error);
+      await sendMail({
+        from: this.configService.get<string>('EMAIL_USER') || '',
+        to: customer.email,
+        subject: 'Confirm your email - Brand Hive',
+        html: `<h3>Your OTP is: <b>${customer.otp}</b></h3>`,
+      });
+    } catch (error) {
+      console.error('Failed to send registration email:', error.message);
+    }
+
+    const { password, otp, otpExpiry, ...customerobj } = JSON.parse(JSON.stringify(createdCustomer));
+    return customerobj as Customer;
   }
 
-  const { password, otp, otpExpiry, ...customerobj } = JSON.parse(JSON.stringify(createdCustomer));
-  return customerobj as Customer;
-}
-  
-//CONFIRM EMAIL SERVICE
+  // CONFIRM EMAIL SERVICE
   async confirmEmail(email: string, otp: string) {
     const customer = await this.customerRepository.getOne({ email });
-    console.log('Stored:', customer?.otp, 'Type:', typeof customer?.otp);
-    console.log('Received:', otp, 'Type:', typeof otp);
-    
+
     if (!customer) throw new UnauthorizedException('Customer not found');
-    if (customer.otp !== otp || new Date() > customer.otpExpiry) {
+
+    // مقارنة آمنة بتحويل الطرفين لـ String
+    const isOtpInvalid = String(customer.otp) !== String(otp);
+    const isExpired = new Date() > new Date(customer.otpExpiry);
+
+    if (isOtpInvalid || isExpired) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
@@ -59,10 +64,11 @@ export class AuthService {
       { _id: customer._id, role: 'customer', email: customer.email },
       { secret: this.configService.get('JWT_SECRET') || 'fallback_secret', expiresIn: '1d' },
     );
+
     return { message: 'Email confirmed successfully', token };
   }
 
-//LOGIN SERVICE
+  // LOGIN SERVICE
   async login(loginDto: LoginDto) {
     const customerExist = await this.userRepository.getOne({ email: loginDto.email });
     if (!customerExist) {
@@ -79,7 +85,7 @@ export class AuthService {
     return token;
   }
 
-//LOGOUT SERVICE
+  // LOGOUT SERVICE
   async logout(token: string) {
     return {
       success: true,
@@ -87,7 +93,7 @@ export class AuthService {
     };
   }
 
-//FORGOT PASSWORD SERVICE
+  // FORGOT PASSWORD SERVICE
   async forgotPassword(email: string) {
     const customer = await this.customerRepository.getOne({ email });
     if (!customer) {
@@ -98,28 +104,32 @@ export class AuthService {
 
     await this.customerRepository.update({ email }, { otp, otpExpiry });
 
-    await sendMail({
-      from: this.configService.get('EMAIL_USER'),
-      to: email,
-      subject: 'Reset Your Password - Brand Hive',
-      html: `<h3>Your password reset code is: <b>${otp}</b></h3>`,
-    });
+    try {
+      await sendMail({
+        from: this.configService.get<string>('EMAIL_USER') || '',
+        to: email,
+        subject: 'Reset Your Password - Brand Hive',
+        html: `<h3>Your password reset code is: <b>${otp}</b></h3>`,
+      });
+    } catch (error) {
+      console.error('Failed to send reset email:', error.message);
+    }
     return { message: 'Reset code sent successfully' };
   }
 
-//VERIFY RESET CODE SERVICE
+  // VERIFY RESET CODE SERVICE
   async verifyResetCode(email: string, otp: string) {
     const customer = await this.customerRepository.getOne({ email });
-    if (!customer || customer.otp !== otp || new Date() > customer.otpExpiry) {
+    if (!customer || String(customer.otp) !== String(otp) || new Date() > new Date(customer.otpExpiry)) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
     return { message: 'OTP is valid. You can now reset your password.' };
   }
 
-//RESET PASSWORD SERVICE
+  // RESET PASSWORD SERVICE
   async resetPassword(email: string, otp: string, newPass: string) {
     const customer = await this.customerRepository.getOne({ email });
-    if (!customer || customer.otp !== otp || new Date() > customer.otpExpiry) {
+    if (!customer || String(customer.otp) !== String(otp) || new Date() > new Date(customer.otpExpiry)) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
     const hashedPass = await bcrypt.hash(newPass, 10);
@@ -130,7 +140,7 @@ export class AuthService {
     return { message: 'Password has been reset successfully' };
   }
 
-//UPDATE LOGGED USER PASSWORD SERVICE
+  // UPDATE PASSWORD SERVICE
   async updateLoggedUserPassword(customerId: string, oldPass: string, newPass: string) {
     const customer = await this.customerRepository.getOne({ _id: customerId });
     const isMatch = await bcrypt.compare(oldPass, customer?.password || '');
@@ -141,7 +151,7 @@ export class AuthService {
     return { message: 'Password updated successfully' };
   }
 
-//UPDATE LOGGED USER DATA SERVICE
+  // UPDATE PROFILE SERVICE
   async updateLoggedUserData(customerId: string, updateData: Partial<Customer>) {
     const { password, otp, otpExpiry, ...cleanData } = updateData as any;
     const updatedCustomer = await this.customerRepository.update({ _id: customerId }, cleanData);
