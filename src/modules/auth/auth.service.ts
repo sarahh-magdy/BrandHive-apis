@@ -1,5 +1,5 @@
 import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { CustomerRepository } from '@models/index';
+import { CustomerRepository } from '../../models/customer/customer.repository';
 import { UserRepository } from '../../models/common/user.repository';
 import { ConfigService } from '@nestjs/config';
 import { Customer } from './entities/auth.entity';
@@ -7,7 +7,6 @@ import { sendMail } from '../../common/helpers/send-mail.helper';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -17,43 +16,31 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  // 1. تسجيل مستخدم جديد
+//REGISTER SERVICE
   async register(customer: Customer) {
     const customerExist = await this.customerRepository.getOne({ email: customer.email });
     if (customerExist) {
       throw new ConflictException('Customer already exists');
     }
-
     const createdCustomer = await this.customerRepository.create(customer);
 
-    // إرسال إيميل التأكيد
-    try {
-      await sendMail({
-        from: this.configService.get<string>('EMAIL_USER') || '',
-        to: customer.email,
-        subject: 'Confirm your email - Brand Hive',
-        html: `<h3>Your OTP is: <b>${customer.otp}</b></h3>`,
-      });
-    } catch (error) {
-      // بنطبع الخطأ بس مش بنوقف الـ Register عشان اليوزر ميتعطلش
-      console.error('Failed to send registration email:', error.message);
-    }
-
+    sendMail({
+      from: this.configService.get('EMAIL_USER'),
+      to: customer.email,
+      subject: 'Confirm your email - Brand Hive',
+      html: `<h3>Your OTP is : ${customer.otp}</h3>`,
+    });
     const { password, otp, otpExpiry, ...customerobj } = JSON.parse(JSON.stringify(createdCustomer));
     return customerobj as Customer;
   }
-
-  // 2. تأكيد الإيميل عن طريق الـ OTP
+//CONFIRM EMAIL SERVICE
   async confirmEmail(email: string, otp: string) {
     const customer = await this.customerRepository.getOne({ email });
-
+    console.log('Stored:', customer?.otp, 'Type:', typeof customer?.otp);
+    console.log('Received:', otp, 'Type:', typeof otp);
+    
     if (!customer) throw new UnauthorizedException('Customer not found');
-
-    // مقارنة آمنة بتحويل الطرفين لـ String والتأكد من الصلاحية
-    const isOtpInvalid = String(customer.otp) !== String(otp);
-    const isExpired = new Date() > new Date(customer.otpExpiry);
-
-    if (isOtpInvalid || isExpired) {
+    if (customer.otp !== otp || new Date() > customer.otpExpiry) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
@@ -66,11 +53,10 @@ export class AuthService {
       { _id: customer._id, role: 'customer', email: customer.email },
       { secret: this.configService.get('JWT_SECRET') || 'fallback_secret', expiresIn: '1d' },
     );
-
     return { message: 'Email confirmed successfully', token };
   }
 
-  // 3. تسجيل الدخول
+//LOGIN SERVICE
   async login(loginDto: LoginDto) {
     const customerExist = await this.userRepository.getOne({ email: loginDto.email });
     if (!customerExist) {
@@ -80,14 +66,14 @@ export class AuthService {
     if (!match) {
       throw new UnauthorizedException('Invalid password');
     }
-    
-    return this.jwtService.sign(
+    const token = this.jwtService.sign(
       { _id: customerExist._id, role: 'customer', email: customerExist.email },
       { secret: this.configService.get('JWT_SECRET') || 'fallback_secret', expiresIn: '1d' },
     );
+    return token;
   }
 
-  // 4. تسجيل الخروج
+//LOGOUT SERVICE
   async logout(token: string) {
     return {
       success: true,
@@ -95,47 +81,41 @@ export class AuthService {
     };
   }
 
-  // 5. طلب استعادة كلمة المرور
+//FORGOT PASSWORD SERVICE
   async forgotPassword(email: string) {
     const customer = await this.customerRepository.getOne({ email });
     if (!customer) {
       throw new UnauthorizedException('If this email exists, an OTP has been sent.');
     }
-
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 دقائق
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
 
     await this.customerRepository.update({ email }, { otp, otpExpiry });
 
-    try {
-      await sendMail({
-        from: this.configService.get<string>('EMAIL_USER') || '',
-        to: email,
-        subject: 'Reset Your Password - Brand Hive',
-        html: `<h3>Your password reset code is: <b>${otp}</b></h3>`,
-      });
-    } catch (error) {
-      console.error('Failed to send reset email:', error.message);
-    }
+    await sendMail({
+      from: this.configService.get('EMAIL_USER'),
+      to: email,
+      subject: 'Reset Your Password - Brand Hive',
+      html: `<h3>Your password reset code is: <b>${otp}</b></h3>`,
+    });
     return { message: 'Reset code sent successfully' };
   }
 
-  // 6. التحقق من كود الاستعادة
+//VERIFY RESET CODE SERVICE
   async verifyResetCode(email: string, otp: string) {
     const customer = await this.customerRepository.getOne({ email });
-    if (!customer || String(customer.otp) !== String(otp) || new Date() > new Date(customer.otpExpiry)) {
+    if (!customer || customer.otp !== otp || new Date() > customer.otpExpiry) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
     return { message: 'OTP is valid. You can now reset your password.' };
   }
 
-  // 7. تعيين كلمة مرور جديدة
+//RESET PASSWORD SERVICE
   async resetPassword(email: string, otp: string, newPass: string) {
     const customer = await this.customerRepository.getOne({ email });
-    if (!customer || String(customer.otp) !== String(otp) || new Date() > new Date(customer.otpExpiry)) {
+    if (!customer || customer.otp !== otp || new Date() > customer.otpExpiry) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
-
     const hashedPass = await bcrypt.hash(newPass, 10);
     await this.customerRepository.update(
       { email },
@@ -144,7 +124,7 @@ export class AuthService {
     return { message: 'Password has been reset successfully' };
   }
 
-  // 8. تحديث كلمة المرور للمستخدم المسجل
+//UPDATE LOGGED USER PASSWORD SERVICE
   async updateLoggedUserPassword(customerId: string, oldPass: string, newPass: string) {
     const customer = await this.customerRepository.getOne({ _id: customerId });
     const isMatch = await bcrypt.compare(oldPass, customer?.password || '');
@@ -155,7 +135,7 @@ export class AuthService {
     return { message: 'Password updated successfully' };
   }
 
-  // 9. تحديث بيانات الملف الشخصي
+//UPDATE LOGGED USER DATA SERVICE
   async updateLoggedUserData(customerId: string, updateData: Partial<Customer>) {
     const { password, otp, otpExpiry, ...cleanData } = updateData as any;
     const updatedCustomer = await this.customerRepository.update({ _id: customerId }, cleanData);
