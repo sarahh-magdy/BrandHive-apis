@@ -7,9 +7,9 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { CustomerRepository, SellerRepository } from '@models/index';
-import { PUBLIC } from '@common/decorators/public.decorator';
-
+import { SellerRepository } from '../../models/seller/seller.repository';
+import { CustomerRepository } from '../../models/customer/customer.repository';
+import { PUBLIC } from '../decorators/public.decorator';
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
@@ -30,6 +30,7 @@ export class AuthGuard implements CanActivate {
 
       const request = context.switchToHttp().getRequest();
 
+//CHECK AUTHORIZATION HEADER
       const authHeader = request.headers.authorization;
       if (!authHeader) {
         throw new UnauthorizedException('No token provided');
@@ -37,6 +38,7 @@ export class AuthGuard implements CanActivate {
 
       const token = authHeader.split(' ')[1];
 
+//VERIFY TOKEN      
       const payload = this.jwtService.verify<{
         _id: string;
         email: string;
@@ -45,6 +47,7 @@ export class AuthGuard implements CanActivate {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
 
+//MAPPING ROLES TO REPOSITORIES
       const repoMap = {
         customer: this.customerRepository,
         seller: this.sellerRepository,
@@ -56,12 +59,14 @@ export class AuthGuard implements CanActivate {
         throw new UnauthorizedException('Invalid role');
       }
 
+//FIND USER
       const user = await repo.getOne({ _id: payload._id });
 
       if (!user) {
         throw new UnauthorizedException('User not found');
       }
 
+//ATTACH USER TO REQUEST
       request.user = user;
 
       return true;

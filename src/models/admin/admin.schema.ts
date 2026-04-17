@@ -1,16 +1,18 @@
-import { Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Schema , SchemaFactory } from "@nestjs/mongoose";
 import { Types } from "mongoose";
 
 @Schema({
-  timestamps: true,
-  discriminatorKey: 'role',
-  toJSON: { virtuals: true },
+    timestamps: true,
+    discriminatorKey: 'role',
+    toJSON: {
+        virtuals: true
+    }
 })
 export class Admin {
-  readonly _id: Types.ObjectId;
-  userName: string;
-  email: string;
-  password: string;
+    readonly _id: Types.ObjectId;
+    userName: string;
+    email: string;
+    password: string;
 }
-
-export const adminSchema = SchemaFactory.createForClass(Admin);
+ 
+export const AdminSchema = SchemaFactory.createForClass(Admin);

@@ -1,7 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { UserMongoModule } from '@shared/index';
+// تعديل المسار
+import { UserMongoModule } from '../../shared/modules/user-mongo.module';
 import { AuthFactoryService } from './factory';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
