@@ -2,27 +2,28 @@ import * as nodemailer from 'nodemailer';
 
 export const sendMail = async (options: { from: string; to: string; subject: string; html: string }) => {
   const transporter = nodemailer.createTransport({
-    service: 'gmail', 
+    host: "sandbox.smtp.mailtrap.io", // هوست مايل تراب ثابت للـ Sandbox
+    port: 2525, // بورت مايل تراب المفتوح دايماً
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, 
-    },
+      user: process.env.EMAIL_USER, // هيقرأ الـ Username الجديد من Railway
+      pass: process.env.EMAIL_PASSWORD  // هيقرأ الـ Password الجديد من Railway
+    }
   });
 
   const mailOptions = {
-    from: options.from,
+    // في مايل تراب Sandbox تقدري تكتبي أي إيميل هنا كمرسل
+    from: options.from || '"Brand Hive" <info@brandhive.com>',
     to: options.to,
     subject: options.subject,
     html: options.html,
   };
 
   try {
-    // مهم جداً الـ await هنا
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email Sent Successfully:', info.messageId);
+    console.log('✅ Mailtrap: Email sent successfully!', info.messageId);
     return info;
   } catch (error: any) {
-    console.error('❌ Nodemailer Error:', error.message);
-    throw error; 
+    console.error('❌ Mailtrap Error:', error.message);
+    throw error;
   }
 };
