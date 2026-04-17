@@ -6,27 +6,22 @@ interface MailOptions {
   html: string;
 }
 
-// 🔥 Create transporter مرة واحدة فقط (أفضل performance)
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false, // مهم مع 587
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD, // لازم App Password
+    pass: process.env.EMAIL_PASSWORD,
   },
-  tls: {
-    rejectUnauthorized: false,
-  },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
 });
 
+// 📧 Send Mail Function
 export async function sendMail(options: MailOptions): Promise<void> {
   try {
-    // اختياري (يفضل تشيله في production لو بيعمل مشاكل)
-    if (process.env.NODE_ENV !== 'production') {
-      await transporter.verify();
-    }
-
     await transporter.sendMail({
       from: `"BrandHive" <${process.env.EMAIL_USER}>`,
       to: options.to,
@@ -41,6 +36,7 @@ export async function sendMail(options: MailOptions): Promise<void> {
   }
 }
 
+// ✉️ OTP Email Template
 export function otpEmailTemplate(
   otp: string,
   type: 'verify' | 'reset' = 'verify',
