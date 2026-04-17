@@ -24,7 +24,7 @@ export class AuthService {
     }
     const createdCustomer = await this.customerRepository.create(customer);
 
-    sendMail({
+    await sendMail({
       from: this.configService.get('EMAIL_USER'),
       to: customer.email,
       subject: 'Confirm your email - Brand Hive',
