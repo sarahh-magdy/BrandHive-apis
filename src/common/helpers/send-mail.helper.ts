@@ -10,13 +10,13 @@ export async function sendMail(options: MailOptions): Promise<void> {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASSWORD,
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
     },
   });
 
   await transporter.sendMail({
-    from: `"BrandHive" <${process.env.MAIL_USER}>`,
+    from: `"BrandHive" <${process.env.EMAIL_USER}>`,
     to: options.to,
     subject: options.subject,
     html: options.html,
