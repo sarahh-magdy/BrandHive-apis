@@ -10,9 +10,8 @@ export class AdminSeed implements OnModuleInit {
   async onModuleInit() {
   if (process.env.NODE_ENV !== 'development') return;
 
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const adminPassword = process.env.ADMIN_PASSWORD;
-
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123';
   if (!adminEmail || !adminPassword) {
     console.warn('Admin seed skipped: missing env variables');
     return;
