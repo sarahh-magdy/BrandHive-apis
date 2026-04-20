@@ -42,7 +42,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  // ───────────────────────── REGISTER ─────────────────────────
+  //  REGISTER 
   async register(dto: RegisterDto) {
     const existing = await this.userRepository.findByEmail(dto.email);
     if (existing) {
@@ -80,7 +80,7 @@ export class AuthService {
     };
   }
 
-  // ───────────────────────── CONFIRM EMAIL ─────────────────────────
+  //  CONFIRM EMAIL 
   async confirmEmail(dto: ConfirmEmailDto) {
     const user = await this.userRepository.findByEmail(
       dto.email,
@@ -144,7 +144,7 @@ export class AuthService {
     return { message: 'Email verified successfully.' };
   }
 
-  // ───────────────────────── RESEND OTP ─────────────────────────
+  //  RESEND OTP 
   async resendOtp(dto: ResendOtpDto) {
     const user = await this.userRepository.findByEmail(
       dto.email,
@@ -188,7 +188,7 @@ const otpExpires = getOtpExpiry(10);
     return { message: 'New OTP sent.' };
   }
 
-  // ───────────────────────── LOGIN ─────────────────────────
+  //  LOGIN 
   async login(dto: LoginDto) {
     const user = await this.userRepository.findByEmail(dto.email, '+password');
 
@@ -229,7 +229,7 @@ const otpExpires = getOtpExpiry(10);
     };
   }
 
-  // ───────────────────────── LOGOUT ─────────────────────────
+  //  LOGOUT 
   async logout(userId: string) {
     await this.userRepository.updateById(userId, {
       refreshToken: null,
@@ -238,7 +238,7 @@ const otpExpires = getOtpExpiry(10);
     return { message: 'Logged out' };
   }
 
-  // ───────────────────────── REFRESH ─────────────────────────
+  //  REFRESH 
   async refreshTokens(userId: string, refreshToken: string) {
     const user = await this.userRepository.findById(
       userId,
@@ -267,7 +267,7 @@ const otpExpires = getOtpExpiry(10);
     return tokens;
   }
 
-  // ───────────────────────── FORGET PASSWORD ─────────────────────────
+  //  FORGET PASSWORD 
   async forgetPassword(dto: ForgetPasswordDto) {
     const user = await this.userRepository.findByEmail(dto.email);
 
@@ -297,7 +297,7 @@ const otpExpires = getOtpExpiry(10);
     return { message: 'Reset OTP sent' };
   }
 
-  // ───────────────────────── VERIFY RESET ─────────────────────────
+  //  VERIFY RESET 
   async verifyResetCode(dto: VerifyResetCodeDto) {
     const user = await this.userRepository.findByEmail(
       dto.email,
@@ -321,7 +321,7 @@ const otpExpires = getOtpExpiry(10);
     return { message: 'Reset verified' };
   }
 
-  // ───────────────────────── RESET PASSWORD ─────────────────────────
+  //  RESET PASSWORD 
   async resetPassword(dto: ResetPasswordDto) {
     const user = await this.userRepository.findByEmail(
       dto.email,
@@ -347,7 +347,7 @@ const otpExpires = getOtpExpiry(10);
     return { message: 'Password reset done' };
   }
 
-  // ───────────────────────── CHANGE PASSWORD ─────────────────────────
+  //  CHANGE PASSWORD 
   async changePassword(userId: string, dto: UpdatePasswordDto) {
     const user = await this.userRepository.findById(userId, '+password');
 
@@ -369,7 +369,7 @@ const otpExpires = getOtpExpiry(10);
     return { message: 'Password changed' };
   }
 
-  // ───────────────────────── PROFILE ─────────────────────────
+  //  PROFILE 
   async getProfile(userId: string) {
     const user = await this.userRepository.findById(userId);
 
@@ -379,7 +379,7 @@ const otpExpires = getOtpExpiry(10);
     return user;
   }
 
-  // ───────────────────────── TOKENS ─────────────────────────
+  //  TOKENS 
   private async generateTokens(userId: string, role: string) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
@@ -400,4 +400,50 @@ const otpExpires = getOtpExpiry(10);
 
     return { accessToken, refreshToken };
   }
+  async createSellerFromRequest(data: {
+  email: string;
+  name: string;
+  whatsappLink?: string;
+}) {
+  const user = await this.userRepository.findByEmail(data.email);
+
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  // لو هو already seller
+  if (user.role === UserRole.SELLER) {
+    throw new ConflictException('User already a seller');
+  }
+
+  // update role
+  await this.userRepository.updateById(user._id.toString(), {
+    role: UserRole.SELLER,
+    whatsappLink: data.whatsappLink || '',
+  });
+
+  return { message: 'User promoted to seller successfully' };
+}
+async createAdmin(dto: RegisterDto) {
+  const existing = await this.userRepository.findByEmail(dto.email);
+
+  if (existing) {
+    throw new ConflictException('Email already exists');
+  }
+
+  const hashed = await bcrypt.hash(dto.password, 12);
+
+  const admin = await this.userRepository.create({
+    name: dto.name,
+    email: dto.email,
+    password: hashed,
+    role: UserRole.ADMIN,
+    isEmailVerified: true,
+  });
+
+  return {
+    message: 'Admin created successfully',
+    admin,
+  };
+}
 }

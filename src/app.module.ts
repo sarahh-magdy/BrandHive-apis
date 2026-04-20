@@ -12,7 +12,7 @@ import devConfig from './config/env/dev.config';
 import { CustomerModule } from './modules/customer/customer.module';
 import { AuthGuard } from '@common/guards/auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
-
+import { AdminSeed } from './seeds/admin.seed';
 import { UserMongoModule } from '@shared/index';
 
 @Module({
@@ -36,6 +36,7 @@ import { UserMongoModule } from '@shared/index';
   ],
   controllers: [AppController],
   providers: [
+    AdminSeed,
     AppService,
     {
       provide: APP_GUARD,

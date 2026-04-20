@@ -23,6 +23,9 @@ import { Public } from '../../common/decorators/public.decorator';
 import { User } from '../../common/decorators/user.decorator';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { Roles } from '@common/decorators';
+import { UserRole } from '@models/index';
+import { RolesGuard } from '@common/guards';
 
 @Controller('auth')
 export class AuthController {
@@ -116,5 +119,12 @@ export class AuthController {
   @Get('me')
   getProfile(@User('_id') userId: string) {
     return this.authService.getProfile(userId.toString());
+  }
+
+  @Post('create-admin')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles([UserRole.ADMIN])
+  createAdmin(@Body() dto: RegisterDto) {
+    return this.authService.createAdmin(dto);
   }
 }
