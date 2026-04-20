@@ -30,9 +30,8 @@ export class BrandController {
   constructor(private readonly brandService: BrandService) {}
 
   // Admin Only
-  //CUSTOMER FOR TESTING PURPOSES
   @Post()
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
   async createBrand(
     @Body() dto: CreateBrandDto,
@@ -44,9 +43,8 @@ export class BrandController {
   }
 
   // Admin Only
-  //CUSTOMER FOR TESTING PURPOSES
   @Put(':id')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
   async updateBrand(
     @Param('id') id: string,
@@ -59,34 +57,31 @@ export class BrandController {
   }
 
   // Admin Only
-  //CUSTOMER FOR TESTING PURPOSES
   @Delete(':id')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async deleteBrand(@Param('id') id: string, @User() user: any) {
     await this.brandService.deleteBrand(id, user);
     return { success: true, message: 'Brand deleted successfully' };
   }
-//CUSTOMER FOR TESTING PURPOSES
+
   @Patch(':id/activate')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async activateBrand(@Param('id') id: string, @User() user: any) {
     const data = await this.brandService.activateBrand(id, user);
     return { success: true, message: 'Brand activated successfully', data };
   }
 
-//CUSTOMER FOR TESTING PURPOSES
   @Patch(':id/deactivate')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async deactivateBrand(@Param('id') id: string, @User() user: any) {
     const data = await this.brandService.deactivateBrand(id, user);
     return { success: true, message: 'Brand deactivated successfully', data };
   }
 
 
-  //CUSTOMER FOR TESTING PURPOSES
 
   @Get('requests')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async findAllRequests(@Query() query: GetBrandsDto) {
     const result = await this.brandService.findAllRequests(query);
     return {
@@ -97,10 +92,9 @@ export class BrandController {
     };
   }
 
-  //CUSTOMER FOR TESTING PURPOSES
 
   @Patch('requests/:requestId/approve')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async approveBrand(
     @Param('requestId') requestId: string,
     @User() user: any,
@@ -113,10 +107,8 @@ export class BrandController {
     };
   }
 
-  //CUSTOMER FOR TESTING PURPOSES
-
   @Patch('requests/:requestId/reject')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async rejectBrand(
     @Param('requestId') requestId: string,
     @Body() dto: RejectBrandDto,
@@ -151,16 +143,14 @@ export class BrandController {
     return { success: true, message: 'Brand fetched successfully', data };
   }
 
-  // ─── Brand Request (Seller + Customer) ────────────────────────
+  // ─── Brand Request (Seller + Customer) 
 
   @Post('request')
   @Auth(['Seller', 'Customer'])
-  // ─── CHANGED: أضفنا FileInterceptor لاستقبال logo مع الـ request ─
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
   async requestBrand(
     @Body() dto: RequestBrandDto,
     @User() user: any,
-    // ─── CHANGED: استقبال الـ logo file ──────────────────────────
     @UploadedFile() logoFile?: Express.Multer.File,
   ) {
     const data = await this.brandService.requestBrand(dto, user, logoFile);

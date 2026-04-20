@@ -27,9 +27,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT ?? 3000;
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  console.log('ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
-  console.log('ADMIN_PASSWORD:', process.env.ADMIN_PASSWORD);
+
   await app.listen(port, '0.0.0.0');
 
   console.log(`Server running on: http://0.0.0.0:${port}`);

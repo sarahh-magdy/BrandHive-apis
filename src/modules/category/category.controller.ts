@@ -27,9 +27,8 @@ export class CategoryController {
   ) {}
 
   // Admin Only
-  //CUSTOMER FOR TESTING PURPOSES
   @Post()
-  @Auth(['Admin' , 'Customer'])
+  @Auth(['Admin' ])
   async create(@Body() createCategoryDto: CreateCategoryDto, @User() user: any) {
     const category = this.categoryFactoryService.createCategory(createCategoryDto, user);
     const categoryCreated = await this.categoryService.create(category);
@@ -39,10 +38,8 @@ export class CategoryController {
       data: categoryCreated,
     };
   }
-
-  //CUSTOMER FOR TESTING PURPOSES
   @Put(':id')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async update(
     @Param('id') id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
@@ -57,9 +54,8 @@ export class CategoryController {
     };
   }
 
-  //CUSTOMER FOR TESTING PURPOSES
   @Delete(':id')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['Admin'])
   async delete(@Param('id') id: string, @User() user: any) {
     await this.categoryService.delete(id, user._id);
     return {
