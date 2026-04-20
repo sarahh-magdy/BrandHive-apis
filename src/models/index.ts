@@ -16,4 +16,10 @@ export * from './category/category.schema';
 export * from './brand/brand.repository';
 export * from './brand/brand.schema';
 
+export * from './cart/cart.repository';
+export * from './cart/cart.schema';
+
+export * from './product/product.repository';
+export * from './product/product.schema';
+
 
