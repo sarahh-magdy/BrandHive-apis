@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import dns from 'dns';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'; 
 
 async function bootstrap() {
   dns.setDefaultResultOrder('ipv4first');
@@ -11,6 +12,16 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors();
+
+  // 2. إعداد Swagger
+  const config = new DocumentBuilder()
+    .setTitle('BrandHive APIs')
+    .setDescription('The API documentation for BrandHive graduation project')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document); // المسار هيكون /docs
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -27,10 +38,8 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const port = process.env.PORT ?? 3000;
-
   await app.listen(port, '0.0.0.0');
 
-  console.log(`Server running on: http://0.0.0.0:${port}`);
+  console.log(`Server running on port: ${port}`);
 }
-
 bootstrap();
