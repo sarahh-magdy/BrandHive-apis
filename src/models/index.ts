@@ -22,4 +22,5 @@ export * from './cart/cart.schema';
 export * from './product/product.repository';
 export * from './product/product.schema';
 
-
+export * from './wishlist/wishlist.repository';
+export * from './wishlist/wishlist.schema';
