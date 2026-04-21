@@ -14,6 +14,8 @@ import { AuthGuard } from '@common/guards/auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { AdminSeed } from './seeds/admin.seed';
 import { UserMongoModule } from '@shared/index';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { CartModule } from './modules/cart/cart.module';
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { UserMongoModule } from '@shared/index';
     CategoryModule,
     BrandModule,
     CustomerModule,
+    WishlistModule, 
+    CartModule,
   ],
   controllers: [AppController],
   providers: [
