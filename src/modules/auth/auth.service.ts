@@ -52,6 +52,7 @@ async register(dto: RegisterDto) {
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, SALT_ROUNDS);
+
     const otp = generateOtp();
     const hashedOtp = await bcrypt.hash(otp, 10);
     const otpExpires = getOtpExpiry(10);
@@ -66,16 +67,27 @@ async register(dto: RegisterDto) {
       isEmailVerified: false,
     });
 
+    // email sending (safe)
+    try {
+      await sendMail({
+        to: dto.email,
+        subject: 'Verify Your Email - BrandHive',
+        html: otpEmailTemplate(otp, 'verify'),
+      });
+    } catch (err) {
+      console.error('Register email failed:', err);
+    }
+
     return {
-      message: 'Registration successful',
+      message: 'Registration successful. Please verify your email.',
       userId: user._id,
     };
 
   } catch (err) {
     console.error('REGISTER ERROR FULL:', err);
 
-    if (err.code === 11000) {
-      throw new ConflictException('Email already exists (DB)');
+    if (err?.code === 11000) {
+      throw new ConflictException('Email already exists');
     }
 
     throw err;
