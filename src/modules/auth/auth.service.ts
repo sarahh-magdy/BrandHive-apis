@@ -43,8 +43,10 @@ export class AuthService {
   ) {}
 
   //  REGISTER 
-  async register(dto: RegisterDto) {
+async register(dto: RegisterDto) {
+  try {
     const existing = await this.userRepository.findByEmail(dto.email);
+
     if (existing) {
       throw new ConflictException('Email already in use');
     }
@@ -64,21 +66,21 @@ export class AuthService {
       isEmailVerified: false,
     });
 
-    try {
-      await sendMail({
-        to: dto.email,
-        subject: 'Verify Your Email - BrandHive',
-        html: otpEmailTemplate(otp, 'verify'),
-      });
-    } catch (err) {
-      console.error('Register email failed:', err.message);
-    }
-
     return {
-      message: 'Registration successful. Please verify your email.',
+      message: 'Registration successful',
       userId: user._id,
     };
+
+  } catch (err) {
+    console.error('REGISTER ERROR FULL:', err);
+
+    if (err.code === 11000) {
+      throw new ConflictException('Email already exists (DB)');
+    }
+
+    throw err;
   }
+}
 
   //  CONFIRM EMAIL 
   async confirmEmail(dto: ConfirmEmailDto) {
