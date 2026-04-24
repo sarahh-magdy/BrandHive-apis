@@ -1,14 +1,14 @@
-import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsOptional, IsString } from 'class-validator';
 
 export class ConfirmEmailDto {
-  @IsEmail()
-  @IsNotEmpty()
-  @Transform(({ value }) => value?.toLowerCase().trim())
-  email: string;
-
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  @Length(6, 6, { message: 'OTP must be exactly 6 digits' })
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsString()
   otp: string;
 }

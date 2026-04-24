@@ -30,7 +30,7 @@ import {
 } from './dto/reset-password.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
-
+import { sendSms } from '../../common/helpers/send-sms.helper';
 const OTP_LOCK_MINUTES = 15;
 const MAX_OTP_ATTEMPTS = 5;
 const SALT_ROUNDS = 12;
@@ -43,191 +43,217 @@ export class AuthService {
   ) {}
 
   //  REGISTER 
-  async register(dto: RegisterDto) {
-    const existing = await this.userRepository.findByEmail(dto.email);
-    if (existing) {
-      throw new ConflictException('Email already in use');
-    }
+async register(dto: RegisterDto) {
+  if (!dto.email && !dto.phone) {
+    throw new BadRequestException('Email or phone is required');
+  }
 
-    const hashedPassword = await bcrypt.hash(dto.password, SALT_ROUNDS);
-    const otp = generateOtp();
-    const hashedOtp = await bcrypt.hash(otp, 10);
-    const otpExpires = getOtpExpiry(10);
+  // check existing
+  const existing = await this.userRepository.findOne({
+    $or: [{ email: dto.email }, { phone: dto.phone }],
+  });
 
-    const user = await this.userRepository.create({
-  name: dto.name,
-  email: dto.email,
-  password: hashedPassword,
-  role: UserRole.CUSTOMER,
-  otp: hashedOtp,
-  otpExpires,
-  isEmailVerified: false,
-});
+  if (existing) {
+    throw new ConflictException('Email or phone already in use');
+  }
 
-    try {
+  const hashedPassword = await bcrypt.hash(dto.password, 12);
+
+  const otp = generateOtp();
+  const hashedOtp = await bcrypt.hash(otp, 10);
+  const otpExpires = getOtpExpiry(10);
+
+  const user = await this.userRepository.create({
+    name: dto.name,
+    email: dto.email,
+    phone: dto.phone,
+    government: dto.government,
+    password: hashedPassword,
+    role: UserRole.CUSTOMER,
+    otp: hashedOtp,
+    otpExpires,
+    isEmailVerified: false,
+    isPhoneVerified: false,
+  });
+
+  // send OTP
+  try {
+    if (dto.email) {
       await sendMail({
         to: dto.email,
-        subject: 'Verify Your Email - BrandHive',
+        subject: 'Verify Email',
         html: otpEmailTemplate(otp, 'verify'),
       });
-    } catch (err) {
-      console.error('Register email failed:', err.message);
+    } else if (dto.phone) {
+      await sendSms(dto.phone, `Your OTP is ${otp}`);
     }
-
-    return {
-      message: 'Registration successful. Please verify your email.',
-      userId: user._id,
-    };
+  } catch (err) {
+    console.error('OTP send failed:', err.message);
   }
+
+  return {
+    message: 'Registration successful. Verify your account.',
+    userId: user._id,
+  };
+}
 
   //  CONFIRM EMAIL 
-  async confirmEmail(dto: ConfirmEmailDto) {
-    const user = await this.userRepository.findByEmail(
-      dto.email,
-      '+otp +otpExpires +otpAttempts +otpLockUntil',
+async confirmOtp(dto: ConfirmEmailDto) {
+  const user = await this.userRepository.findOne(
+    {
+      $or: [{ email: dto.email }, { phone: dto.phone }],
+    },
+    '+otp +otpExpires +otpAttempts +otpLockUntil',
+  );
+
+  if (!user) throw new NotFoundException('User not found');
+
+  if (
+    (user.email && user.isEmailVerified) ||
+    (user.phone && user.isPhoneVerified)
+  ) {
+    throw new BadRequestException('Already verified');
+  }
+
+  if (user.otpLockUntil && new Date() < new Date(user.otpLockUntil)) {
+    const minutesLeft = Math.ceil(
+      (new Date(user.otpLockUntil).getTime() - Date.now()) / 60000,
     );
+    throw new ForbiddenException(
+      `Too many attempts. Try again in ${minutesLeft} minutes.`,
+    );
+  }
 
-    if (!user) throw new NotFoundException('User not found');
-    if (user.isEmailVerified)
-      throw new BadRequestException('Email already verified');
+  if (!user.otp || !user.otpExpires) {
+    throw new BadRequestException('No OTP found.');
+  }
 
-    if (user.otpLockUntil && new Date() < new Date(user.otpLockUntil)) {
-      const minutesLeft = Math.ceil(
-        (new Date(user.otpLockUntil).getTime() - Date.now()) / 60000,
-      );
-      throw new ForbiddenException(
-        `Too many attempts. Try again in ${minutesLeft} minutes.`,
-      );
-    }
+  if (isOtpExpired(user.otpExpires)) {
+    throw new BadRequestException('OTP expired.');
+  }
 
-    if (!user.otp || !user.otpExpires) {
-      throw new BadRequestException('No OTP found. Please request a new one.');
-    }
+  const isMatch = await bcrypt.compare(dto.otp, user.otp);
 
-    if (isOtpExpired(user.otpExpires)) {
-      throw new BadRequestException('OTP expired. Please request new one.');
-    }
+  if (!isMatch) {
+    const attempts = (user.otpAttempts || 0) + 1;
 
-    const isMatch = await bcrypt.compare(dto.otp, user.otp);
-
-    if (!isMatch) {
-      const attempts = (user.otpAttempts || 0) + 1;
-
-      if (attempts >= MAX_OTP_ATTEMPTS) {
-        await this.userRepository.updateById(user._id.toString(), {
-          otpAttempts: 0,
-          otpLockUntil: getOtpExpiry(OTP_LOCK_MINUTES),
-        });
-
-        throw new ForbiddenException(
-          `Too many attempts. Locked for ${OTP_LOCK_MINUTES} minutes.`,
-        );
-      }
-
+    if (attempts >= MAX_OTP_ATTEMPTS) {
       await this.userRepository.updateById(user._id.toString(), {
-        otpAttempts: attempts,
+        otpAttempts: 0,
+        otpLockUntil: getOtpExpiry(OTP_LOCK_MINUTES),
       });
 
-      throw new BadRequestException(
-        `Invalid OTP. ${MAX_OTP_ATTEMPTS - attempts} attempts left.`,
-      );
+      throw new ForbiddenException('Too many attempts.');
     }
 
     await this.userRepository.updateById(user._id.toString(), {
-      isEmailVerified: true,
-      otp: null,
-      otpExpires: null,
-      otpAttempts: 0,
-      otpLockUntil: null,
+      otpAttempts: attempts,
     });
 
-    return { message: 'Email verified successfully.' };
+    throw new BadRequestException('Invalid OTP');
   }
+
+  const update: any = {
+    otp: null,
+    otpExpires: null,
+    otpAttempts: 0,
+    otpLockUntil: null,
+  };
+
+if (dto.email) update.isEmailVerified = true;
+if (dto.phone) update.isPhoneVerified = true;
+
+  await this.userRepository.updateById(user._id.toString(), update);
+
+  return { message: 'Verified successfully' };
+}
 
   //  RESEND OTP 
-  async resendOtp(dto: ResendOtpDto) {
-    const user = await this.userRepository.findByEmail(
-      dto.email,
-      '+otpLockUntil',
+async resendOtp(dto: ResendOtpDto) {
+  const user = await this.userRepository.findOne(
+    {
+      $or: [{ email: dto.email }, { phone: dto.phone }],
+    },
+    '+otpLockUntil',
+  );
+
+  if (!user) throw new NotFoundException('User not found');
+
+  if (
+    (user.email && user.isEmailVerified) ||
+    (user.phone && user.isPhoneVerified)
+  ) {
+    throw new BadRequestException('Already verified');
+  }
+
+  if (user.otpLockUntil && new Date() < new Date(user.otpLockUntil)) {
+    const minutesLeft = Math.ceil(
+      (new Date(user.otpLockUntil).getTime() - Date.now()) / 60000,
     );
 
-    if (!user) throw new NotFoundException('User not found');
-    if (user.isEmailVerified)
-      throw new BadRequestException('Email already verified');
+    throw new ForbiddenException(`Try again in ${minutesLeft} minutes.`);
+  }
 
-    if (user.otpLockUntil && new Date() < new Date(user.otpLockUntil)) {
-      const minutesLeft = Math.ceil(
-        (new Date(user.otpLockUntil).getTime() - Date.now()) / 60000,
-      );
+  const otp = generateOtp();
+  const hashedOtp = await bcrypt.hash(otp, 10);
+  const otpExpires = getOtpExpiry(10);
 
-      throw new ForbiddenException(
-        `Try again in ${minutesLeft} minutes.`,
-      );
-    }
+  await this.userRepository.updateById(user._id.toString(), {
+    otp: hashedOtp,
+    otpExpires,
+    otpAttempts: 0,
+  });
 
-const otp = generateOtp();
-const hashedOtp = await bcrypt.hash(otp, 10);
-const otpExpires = getOtpExpiry(10);
-
-    await this.userRepository.updateById(user._id.toString(), {
-      otp: hashedOtp,
-      otpExpires,
-      otpAttempts: 0,
-    });
-
-    try {
+  try {
+    if (user.email) {
       await sendMail({
-        to: dto.email,
-        subject: 'New OTP - BrandHive',
+        to: user.email,
+        subject: 'New OTP',
         html: otpEmailTemplate(otp, 'verify'),
       });
-    } catch (err) {
-      console.error('Resend OTP email failed:', err.message);
+    } else if (user.phone) {
+      await sendSms(user.phone, `Your OTP is ${otp}`);
     }
-
-    return { message: 'New OTP sent.' };
+  } catch (err) {
+    console.error('Resend OTP failed:', err.message);
   }
+
+  return { message: 'OTP resent successfully' };
+}
 
   //  LOGIN 
-  async login(dto: LoginDto) {
-    const user = await this.userRepository.findByEmail(dto.email, '+password');
+async login(dto: LoginDto) {
+  const user = await this.userRepository.findOne(
+    {
+      $or: [{ email: dto.identifier }, { phone: dto.identifier }],
+    },
+    '+password',
+  );
 
-    if (!user)
-      throw new UnauthorizedException('Invalid email or password');
+  if (!user)
+    throw new UnauthorizedException('Invalid credentials');
 
-    const isValid = await bcrypt.compare(dto.password, user.password);
+  const isValid = await bcrypt.compare(dto.password, user.password);
 
-    if (!isValid)
-      throw new UnauthorizedException('Invalid email or password');
+  if (!isValid)
+    throw new UnauthorizedException('Invalid credentials');
 
-    if (!user.isEmailVerified)
-      throw new ForbiddenException('Verify email first');
+  if (user.email && !user.isEmailVerified)
+    throw new ForbiddenException('Verify email first');
 
-    if (!user.isActive)
-      throw new ForbiddenException('Account deactivated');
+  if (user.phone && !user.isPhoneVerified)
+    throw new ForbiddenException('Verify phone first');
 
-    const tokens = await this.generateTokens(
-      user._id.toString(),
-      user.role,
-    );
+  const tokens = await this.generateTokens(
+    user._id.toString(),
+    user.role,
+  );
 
-    const hashedRefresh = await bcrypt.hash(tokens.refreshToken, 10);
-
-    await this.userRepository.updateById(user._id.toString(), {
-      refreshToken: hashedRefresh,
-    });
-
-    return {
-      message: 'Login successful',
-      ...tokens,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    };
-  }
+  return {
+    message: 'Login successful',
+    ...tokens,
+  };
+}
 
   //  LOGOUT 
   async logout(userId: string) {
@@ -425,8 +451,11 @@ const otpExpires = getOtpExpiry(10);
   return { message: 'User promoted to seller successfully' };
 }
 async createAdmin(dto: RegisterDto) {
-  const existing = await this.userRepository.findByEmail(dto.email);
+if (!dto.email) {
+  throw new BadRequestException('Email is required for admin');
+}
 
+const existing = await this.userRepository.findByEmail(dto.email);
   if (existing) {
     throw new ConflictException('Email already exists');
   }
