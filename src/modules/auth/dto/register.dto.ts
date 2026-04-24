@@ -1,12 +1,10 @@
 import {
   IsEmail,
   IsNotEmpty,
-  IsOptional,
   IsString,
   MinLength,
   MaxLength,
   Matches,
-  ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -16,21 +14,10 @@ export class RegisterDto {
   @MaxLength(50)
   name: string;
 
-  @ValidateIf((o) => !o.phone)
   @IsEmail()
-  @Transform(({ value }) => value?.toLowerCase().trim())
-  email?: string;
-
-  @ValidateIf((o) => !o.email)
-  @IsString()
-  @Matches(/^01[0-2,5]{1}[0-9]{8}$/, {
-    message: 'Invalid Egyptian phone number',
-  })
-  phone?: string;
-
   @IsNotEmpty()
-  @IsString()
-  government: string;
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
 
   @IsNotEmpty()
   @IsString()

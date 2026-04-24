@@ -44,7 +44,7 @@ export class AuthController {
   @Post('confirm-email')
   @HttpCode(HttpStatus.OK)
   confirmEmail(@Body() dto: ConfirmEmailDto) {
-    return this.authService.confirmOtp(dto);
+    return this.authService.confirmEmail(dto);
   }
 
   // POST /auth/resend-otp

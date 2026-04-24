@@ -6,12 +6,18 @@ import { User, UserDocument } from './user.schema';
 @Injectable()
 export class UserRepository {
   constructor(
-    @InjectModel(User.name)
-    private readonly userModel: Model<UserDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
   ) {}
 
   async create(data: Partial<User>): Promise<UserDocument> {
     return this.userModel.create(data);
+  }
+
+  async findOne(
+    filter: QueryFilter<UserDocument>,
+    select?: string,
+  ): Promise<UserDocument | null> {
+    return this.userModel.findOne(filter).select(select || '').exec();
   }
 
   async findById(id: string, select?: string): Promise<UserDocument | null> {
@@ -22,14 +28,10 @@ export class UserRepository {
     email: string,
     select?: string,
   ): Promise<UserDocument | null> {
-    return this.userModel.findOne({ email }).select(select || '').exec();
-  }
-
-  async findOne(
-    filter: QueryFilter<UserDocument>,
-    select?: string,
-  ): Promise<UserDocument | null> {
-    return this.userModel.findOne(filter).select(select || '').exec();
+    return this.userModel
+      .findOne({ email })
+      .select(select || '')
+      .exec();
   }
 
   async updateById(
@@ -54,9 +56,7 @@ export class UserRepository {
     await this.userModel.findByIdAndDelete(id).exec();
   }
 
-  async findAll(
-    filter: QueryFilter<UserDocument> = {},
-  ): Promise<UserDocument[]> {
+  async findAll(filter: QueryFilter<UserDocument> = {}): Promise<UserDocument[]> {
     return this.userModel.find(filter).exec();
   }
 }

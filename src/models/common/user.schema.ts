@@ -9,18 +9,13 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, discriminatorKey: 'role' })
 export class User {
   @Prop({ required: true, trim: true })
   name: string;
 
-  // ❗ optional
-  @Prop({ unique: true, lowercase: true, trim: true, sparse: true })
-  email?: string;
-
-  // ✅ new
-  @Prop({ unique: true, sparse: true })
-  phone?: string;
+  @Prop({ required: true, unique: true, lowercase: true, trim: true })
+  email: string;
 
   @Prop({ required: true, select: false })
   password: string;
@@ -31,23 +26,11 @@ export class User {
   @Prop({ default: false })
   isEmailVerified: boolean;
 
-  @Prop({ default: false })
-  isPhoneVerified: boolean;
-
-  @Prop()
-  government: string;
-
   @Prop({ select: false })
   otp: string;
 
   @Prop({ select: false })
   otpExpires: Date;
-
-  @Prop({ default: 0, select: false })
-  otpAttempts: number;
-
-  @Prop({ select: false })
-  otpLockUntil: Date;
 
   @Prop({ select: false })
   resetPasswordOtp: string;
@@ -57,6 +40,15 @@ export class User {
 
   @Prop({ select: false })
   resetPasswordVerified: boolean;
+
+  @Prop({ default: 0, select: false })
+  otpAttempts: number;
+
+  @Prop({ select: false })
+  otpLockUntil: Date;
+
+  @Prop()
+  phone: string;
 
   @Prop()
   avatar: string;

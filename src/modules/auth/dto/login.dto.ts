@@ -1,12 +1,11 @@
-import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class LoginDto {
+  @IsEmail()
   @IsNotEmpty()
-  @IsString()
-  @Matches(/^(\S+@\S+\.\S+|01[0-2,5]{1}[0-9]{8})$/, {
-    message: 'Enter valid email or Egyptian phone number',
-  })
-  identifier: string;
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
 
   @IsNotEmpty()
   @IsString()

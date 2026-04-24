@@ -1,11 +1,9 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class ResendOtpDto {
-  @IsOptional()
-  @IsString()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
+  @IsEmail()
+  @IsNotEmpty()
+  @Transform(({ value }) => value?.toLowerCase().trim())
+  email: string;
 }
