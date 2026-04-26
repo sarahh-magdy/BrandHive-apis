@@ -7,6 +7,7 @@ import {
   Matches,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { Match } from '@common/decorators';
 
 export class RegisterDto {
   @IsNotEmpty()
@@ -27,4 +28,8 @@ export class RegisterDto {
     message: 'Password must contain uppercase, lowercase, and number',
   })
   password: string;
+
+  @IsNotEmpty()
+  @Match('password', { message: 'Passwords do not match' })
+  confirmPassword: string;
 }
