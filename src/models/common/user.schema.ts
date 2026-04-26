@@ -9,7 +9,7 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
-@Schema({ timestamps: true, discriminatorKey: 'role' })
+@Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, trim: true })
   name: string;

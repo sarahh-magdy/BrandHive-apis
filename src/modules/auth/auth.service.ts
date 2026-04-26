@@ -63,11 +63,15 @@ const user = await this.userRepository.create({
   isEmailVerified: false,
 });
 
-    await sendMail({
-      to: dto.email,
-      subject: 'Verify Your Email - BrandHive',
-      html: otpEmailTemplate(otp, 'verify'),
-    });
+try {
+  await sendMail({
+    to: dto.email,
+    subject: 'Verify Your Email - BrandHive',
+    html: otpEmailTemplate(otp, 'verify'),
+  });
+} catch (err) {
+  console.error('Email send failed:', err);
+}
 
     return {
       message: 'Registration successful. Please verify your email.',
