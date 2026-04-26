@@ -30,7 +30,6 @@ import {
 } from './dto/reset-password.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
-
 const OTP_LOCK_MINUTES = 15;
 const MAX_OTP_ATTEMPTS = 5;
 const SALT_ROUNDS = 12;
@@ -43,57 +42,38 @@ export class AuthService {
   ) {}
 
   //  REGISTER 
-async register(dto: RegisterDto) {
-  try {
+  async register(dto: RegisterDto) {
     const existing = await this.userRepository.findByEmail(dto.email);
-
     if (existing) {
       throw new ConflictException('Email already in use');
     }
+  const hashedPassword = await bcrypt.hash(dto.password, SALT_ROUNDS);
 
-    const hashedPassword = await bcrypt.hash(dto.password, SALT_ROUNDS);
+const otp = generateOtp();
+const hashedOtp = await bcrypt.hash(otp, 10);
+const otpExpires = getOtpExpiry(10);
 
-    const otp = generateOtp();
-    const hashedOtp = await bcrypt.hash(otp, 10);
-    const otpExpires = getOtpExpiry(10);
+const user = await this.userRepository.create({
+  name: dto.name,
+  email: dto.email,
+  password: hashedPassword,
+  role: UserRole.CUSTOMER,
+  otp: hashedOtp,
+  otpExpires,
+  isEmailVerified: false,
+});
 
-    const user = await this.userRepository.create({
-      name: dto.name,
-      email: dto.email,
-      password: hashedPassword,
-      role: UserRole.CUSTOMER,
-      otp: hashedOtp,
-      otpExpires,
-      isEmailVerified: false,
+    await sendMail({
+      to: dto.email,
+      subject: 'Verify Your Email - BrandHive',
+      html: otpEmailTemplate(otp, 'verify'),
     });
-
-    // email sending (safe)
-    try {
-      await sendMail({
-        to: dto.email,
-        subject: 'Verify Your Email - BrandHive',
-        html: otpEmailTemplate(otp, 'verify'),
-      });
-    } catch (err) {
-      console.error('Register email failed:', err);
-    }
 
     return {
       message: 'Registration successful. Please verify your email.',
       userId: user._id,
     };
-
-  } catch (err) {
-    console.error('REGISTER ERROR FULL:', err);
-
-    if (err?.code === 11000) {
-      throw new ConflictException('Email already exists');
-    }
-
-    throw err;
   }
-}
-
   //  CONFIRM EMAIL 
   async confirmEmail(dto: ConfirmEmailDto) {
     const user = await this.userRepository.findByEmail(
