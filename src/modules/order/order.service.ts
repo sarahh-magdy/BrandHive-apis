@@ -82,7 +82,28 @@
       // @Inject(NOTIFICATION_SERVICE) private notificationService: INotificationService,
       // @Inject(USER_SERVICE) private userService: IUserService,
     ) {}
+  async hasDeliveredOrderWithProduct(userId: string, productId: string) {
+  const orders = await this.orderRepository.findByUser(
+    userId,
+    { status: OrderStatus.DELIVERED },
+    { page: 1, limit: 100 },
+  );
 
+  const order = orders.data.find((order: any) =>
+    order.items?.some(
+      (item: any) => String(item.productId) === String(productId),
+    ),
+  );
+
+  if (!order) {
+    return { exists: false };
+  }
+
+  return {
+    exists: true,
+    orderId: order._id,
+  };
+}
     // ─────────────────────────────────────────────────────────────
     // CREATE ORDER
     // ─────────────────────────────────────────────────────────────

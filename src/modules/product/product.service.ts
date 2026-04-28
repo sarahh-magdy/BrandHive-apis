@@ -26,7 +26,9 @@ export class ProductService {
     private readonly cloudinaryService: CloudinaryService,
   ) {}
 
-//CREATE PRODUCT  
+  // ─────────────────────────────────────────────────────────────
+  // CREATE PRODUCT  
+  // ─────────────────────────────────────────────────────────────
   async createProduct(
     dto: CreateProductDto,
     user: any,
@@ -44,7 +46,6 @@ export class ProductService {
     });
     if (!brand) throw new NotFoundException('Brand not found');
 
-    // ─── CHANGED: createProduct أصبح async ───────────────────────
     const product = await this.productFactoryService.createProduct(dto, user, files);
 
     await this.checkSlugConflict(product.slug);
@@ -55,12 +56,12 @@ export class ProductService {
       totalProducts: (brand as any).stats.totalProducts + 1,
     });
 
-    // ─── CHANGED: شيلنا baseUrl من mapProduct ────────────────────
     return this.productFactoryService.mapProduct(created);
   }
 
-  // ─── Find All ─────────────────────────────────────────────────
-  
+  // ─────────────────────────────────────────────────────────────
+  // FIND ALL
+  // ─────────────────────────────────────────────────────────────
   async findAll(query: GetProductsDto) {
     const {
       page = 1, limit = 10, search,
@@ -103,8 +104,9 @@ export class ProductService {
       this.productRepository.countDocuments(filter),
     ]);
 
-    // ─── CHANGED: شيلنا baseUrl من mapProduct ────────────────────
-    const data = products.map((p) => this.productFactoryService.mapProduct(p));
+    const data = products.map((p) =>
+      this.productFactoryService.mapProduct(p),
+    );
 
     return {
       data,
@@ -112,8 +114,9 @@ export class ProductService {
     };
   }
 
-  // ─── Find One ─────────────────────────────────────────────────
-  
+  // ─────────────────────────────────────────────────────────────
+  // FIND ONE
+  // ─────────────────────────────────────────────────────────────
   async findOne(id: string) {
     const product = await this.productRepository.findOnePopulated({
       _id: new Types.ObjectId(id),
@@ -121,12 +124,12 @@ export class ProductService {
     });
     if (!product) throw new NotFoundException('Product not found');
 
-    // ─── CHANGED: شيلنا baseUrl من mapProduct ────────────────────
     return this.productFactoryService.mapProduct(product);
   }
 
-  // ─── Update Product ───────────────────────────────────────────
-  
+  // ─────────────────────────────────────────────────────────────
+  // UPDATE PRODUCT
+  // ─────────────────────────────────────────────────────────────
   async updateProduct(
     id: string,
     dto: UpdateProductDto,
@@ -149,7 +152,12 @@ export class ProductService {
       if (!brand) throw new NotFoundException('Brand not found');
     }
 
-    const updates = await this.productFactoryService.updateProduct(id, dto, user, files);
+    const updates = await this.productFactoryService.updateProduct(
+      id,
+      dto,
+      user,
+      files,
+    );
 
     if (updates.slug) {
       await this.checkSlugConflict(updates.slug, id);
@@ -162,11 +170,12 @@ export class ProductService {
     );
     if (!updated) throw new NotFoundException('Product not found');
 
-    // ─── CHANGED: شيلنا baseUrl من mapProduct ────────────────────
     return this.productFactoryService.mapProduct(updated);
   }
 
-  // ─── Delete Product (Soft) ────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // DELETE PRODUCT
+  // ─────────────────────────────────────────────────────────────
   async deleteProduct(id: string, user: any) {
     const product = await this.productRepository.getOne({
       _id: new Types.ObjectId(id),
@@ -174,9 +183,9 @@ export class ProductService {
     });
     if (!product) throw new NotFoundException('Product not found');
 
-    // ─── CHANGED: حذف كل صور المنتج من Cloudinary ─────────────────
     const images = (product as any).images ?? [];
     const publicIds = images.map((img: any) => img.publicId).filter(Boolean);
+
     if (publicIds.length) {
       await this.cloudinaryService.deleteImages(publicIds);
     }
@@ -186,30 +195,12 @@ export class ProductService {
       { isDeleted: true, deletedBy: user._id, deletedAt: new Date() },
       { new: true },
     );
-
-    const brand = await this.brandRepository.getOne({
-      _id: (product as any).brand,
-    });
-    if (brand) {
-      const current = (brand as any).stats?.totalProducts ?? 0;
-      await this.brandService.updateBrandStats(
-        (product as any).brand.toString(),
-        { totalProducts: Math.max(0, current - 1) },
-      );
-    }
   }
 
-  // ─── Activate ─────────────────────────────────────────────────
-  
+  // ─────────────────────────────────────────────────────────────
+  // ACTIVATE / DEACTIVATE
+  // ─────────────────────────────────────────────────────────────
   async activateProduct(id: string, user: any) {
-    const product = await this.productRepository.getOne({
-      _id: new Types.ObjectId(id),
-      isDeleted: false,
-    });
-    if (!product) throw new NotFoundException('Product not found');
-    if ((product as any).isActive)
-      throw new BadRequestException('Product is already active');
-
     const updated = await this.productRepository.updateOne(
       { _id: new Types.ObjectId(id) },
       { isActive: true, updatedBy: user._id },
@@ -218,17 +209,7 @@ export class ProductService {
     return this.productFactoryService.mapProduct(updated);
   }
 
-  // ─── Deactivate ───────────────────────────────────────────────
-  
   async deactivateProduct(id: string, user: any) {
-    const product = await this.productRepository.getOne({
-      _id: new Types.ObjectId(id),
-      isDeleted: false,
-    });
-    if (!product) throw new NotFoundException('Product not found');
-    if (!(product as any).isActive)
-      throw new BadRequestException('Product is already inactive');
-
     const updated = await this.productRepository.updateOne(
       { _id: new Types.ObjectId(id) },
       { isActive: false, updatedBy: user._id },
@@ -237,34 +218,58 @@ export class ProductService {
     return this.productFactoryService.mapProduct(updated);
   }
 
-  // ─── Update Product Stats ─────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // UPDATE PRODUCT STATS
+  // ─────────────────────────────────────────────────────────────
   async updateProductStats(
     productId: string,
     stats: { averageRating?: number; totalReviews?: number },
   ) {
-    const product = await this.productRepository.getOne({
-      _id: new Types.ObjectId(productId),
-      isDeleted: false,
-    });
-    if (!product) throw new NotFoundException('Product not found');
-
-    const updatePayload: Record<string, any> = {};
-    if (stats.averageRating !== undefined)
-      updatePayload['stats.averageRating'] = stats.averageRating;
-    if (stats.totalReviews !== undefined)
-      updatePayload['stats.totalReviews'] = stats.totalReviews;
-
     return this.productRepository.updateOne(
       { _id: new Types.ObjectId(productId) },
-      updatePayload,
+      {
+        'stats.averageRating': stats.averageRating,
+        'stats.totalReviews': stats.totalReviews,
+      },
       { new: true },
     );
   }
 
-  // ─── Private Helpers ──────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────
+  // ⭐ ADDED: FIND BY ID (FOR REVIEW SERVICE)
+  // ─────────────────────────────────────────────────────────────
+  async findById(productId: string) {
+    return this.productRepository.findOnePopulated({
+      _id: new Types.ObjectId(productId),
+      isDeleted: false,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ⭐ ADDED: UPDATE RATING (FOR REVIEW SERVICE)
+  // ─────────────────────────────────────────────────────────────
+  async updateRating(
+    productId: string,
+    averageRating: number,
+    totalReviews: number,
+  ) {
+    return this.productRepository.updateOne(
+      { _id: new Types.ObjectId(productId) },
+      {
+        'stats.averageRating': averageRating,
+        'stats.totalReviews': totalReviews,
+      },
+      { new: true },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // PRIVATE
+  // ─────────────────────────────────────────────────────────────
   private async checkSlugConflict(slug: string, excludeId?: string) {
     const filter: Record<string, any> = { slug, isDeleted: false };
     if (excludeId) filter._id = { $ne: new Types.ObjectId(excludeId) };
+
     const exists = await this.productRepository.getOne(filter);
     if (exists) throw new ConflictException('Product name already exists');
   }

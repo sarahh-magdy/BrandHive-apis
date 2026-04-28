@@ -13,7 +13,8 @@ import {
 } from './dto/create-review.dto';
 import { GetReviewsDto, ReviewSortBy } from './dto/get-reviews.dto';
 import { buildReview } from './factory';
-
+import { OrderService } from '../order/order.service';
+import { ProductService } from '../product/product.service';
 /**
  * Replace with actual imports
  */
@@ -36,9 +37,9 @@ interface IProductService {
 @Injectable()
 export class ReviewService {
   constructor(
-    private readonly reviewRepository: ReviewRepository,
-    private readonly orderService: IOrderService,
-    private readonly productService: IProductService,
+  private readonly reviewRepository: ReviewRepository,
+  private readonly orderService: OrderService,
+  private readonly productService: ProductService,
   ) {}
 
   // ─────────────────────────────────────────
