@@ -125,11 +125,15 @@
       }
 
       // 2. Stock validation + price locking
-      for (const cartItem of cart.items) {
-        const product = await productService.findById(String(cartItem.productId));
-        if (!product) {
-          throw new NotFoundException(`Product ${cartItem.productId} not found`);
-        }
+for (const cartItem of cart.items) {
+const product = await productService.findById(
+  String(cartItem.product),
+);
+
+  if (!product) {
+    throw new NotFoundException(`Product not found`);
+  }
+
         if (product.stock < cartItem.quantity) {
           throw new BadRequestException(
             `Insufficient stock for "${product.name}". Available: ${product.stock}`,
@@ -152,7 +156,8 @@
 
       // 4. Calculate subtotal (price locked from cart)
       const subtotal = cart.items.reduce(
-        (acc: number, item: any) => acc + item.price * item.quantity,
+        (acc: number, item: any) =>
+          acc + (item.lockedDiscountPrice ?? item.lockedPrice) * item.quantity,
         0,
       );
 
@@ -201,7 +206,10 @@
 
       // 9. Reduce stock (after successful order creation)
       for (const cartItem of cart.items) {
-        await productService.reduceStock(String(cartItem.productId), cartItem.quantity);
+        await productService.reduceStock(
+          String(cartItem.product),
+          cartItem.quantity,
+        );
       }
 
       // 10. Clear cart
