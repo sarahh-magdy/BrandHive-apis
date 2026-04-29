@@ -16,8 +16,11 @@ import { AdminGetOrdersDto, GetOrdersDto } from './dto/get-orders.dto';
 import { buildOrderFromCart, buildStatusHistoryEntry } from './factory';
 import { calculateShippingFee } from '../../common/helpers/shipping.helper';
 
-interface ICartService { getActiveCart(userId: string): Promise<any>; clearCart(userId: string): Promise<void>; }
-interface IProductService { findById(productId: string): Promise<any>; reduceStock(productId: string, qty: number): Promise<void>; }
+interface ICartService { 
+  getCartForOrder(userId: string): Promise<any>; // أضفنا دي
+  getActiveCart(userId: string): Promise<any>; 
+  clearCart(userId: string): Promise<void>; 
+}interface IProductService { findById(productId: string): Promise<any>; reduceStock(productId: string, qty: number): Promise<void>; }
 interface ICouponService { validateAndApply(code: string, userId: string, subtotal: number): Promise<any>; markUsed(code: string, userId: string): Promise<void>; }
 interface INotificationService { send(event: string, payload: any): Promise<void>; }
 interface IUserService { findById(userId: string): Promise<any>; getDefaultAddress(userId: string): Promise<any>; }
@@ -43,7 +46,7 @@ export class OrderService {
     userService?: IUserService,
     notificationService?: INotificationService,
   ): Promise<OrderDocument> {
-    const cart = await cartService.getActiveCart(userId);
+const cart = await cartService.getCartForOrder(userId);
     if (!cart || !cart.items?.length) throw new BadRequestException('السلّة فارغة');
 
     for (const item of cart.items) {
