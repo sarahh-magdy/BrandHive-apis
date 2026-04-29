@@ -1,73 +1,18 @@
 import { Types } from 'mongoose';
 import { OrderStatus, PaymentMethod, PaymentStatus } from '../../../models/order/order.schema';
 
-interface CartItem {
-  productId: Types.ObjectId;
-  sellerId: Types.ObjectId;
-  name: string;
-  image?: string;
-  quantity: number;
-  price: number; // price locked from cart
-}
+export function buildOrderFromCart(params: any) {
+  const { userId, orderNumber, cartItems, shippingAddress, pricing, paymentMethod, coupon, notes, changedBy } = params;
 
-interface PricingInput {
-  subtotal: number;
-  shippingFee: number;
-  discount: number;
-  tax: number;
-}
-
-interface CouponInput {
-  code: string;
-  discountAmount: number;
-  type: 'percentage' | 'fixed';
-  value: number;
-}
-
-interface ShippingAddressInput {
-  fullName: string;
-  phone: string;
-  street: string;
-  city: string;
-  governorate: string;
-  postalCode?: string;
-  country?: string;
-}
-
-interface BuildOrderParams {
-  userId: Types.ObjectId;
-  orderNumber: string;
-  cartItems: CartItem[];
-  shippingAddress: ShippingAddressInput;
-  pricing: PricingInput;
-  paymentMethod: PaymentMethod;
-  coupon?: CouponInput | null;
-  notes?: string;
-  changedBy?: Types.ObjectId;
-}
-
-export function buildOrderFromCart(params: BuildOrderParams) {
-  const {
-    userId,
-    orderNumber,
-    cartItems,
-    shippingAddress,
-    pricing,
-    paymentMethod,
-    coupon,
-    notes,
-    changedBy,
-  } = params;
-
-const items = cartItems.map((item) => ({
-  productId: item.productId,
-  sellerId: item.sellerId,
-  name: item.name,
-  image: item.image ?? '',   
-  quantity: item.quantity,
-  unitPrice: item.price,
-  totalPrice: item.price * item.quantity,
-}));
+  const items = cartItems.map((item: any) => ({
+    productId: item.product,
+    sellerId: item.sellerId, // تأكدي إن الـ Cart Item فيها sellerId
+    name: item.name,
+    image: item.image || '',
+    quantity: item.quantity,
+    unitPrice: item.lockedDiscountPrice ?? item.lockedPrice,
+    totalPrice: (item.lockedDiscountPrice ?? item.lockedPrice) * item.quantity,
+  }));
 
   const total = pricing.subtotal + pricing.shippingFee + pricing.tax - pricing.discount;
 
@@ -77,8 +22,8 @@ const items = cartItems.map((item) => ({
     items,
     shippingAddress: {
       ...shippingAddress,
-      country: shippingAddress.country ?? 'Egypt',
-      postalCode: shippingAddress.postalCode ?? '',
+      country: shippingAddress.country || 'Egypt',
+      postalCode: shippingAddress.postalCode || '',
     },
     pricing: {
       subtotal: pricing.subtotal,
@@ -87,29 +32,27 @@ const items = cartItems.map((item) => ({
       tax: pricing.tax,
       total: Math.max(0, parseFloat(total.toFixed(2))),
     },
-    coupon: coupon ?? null,
+    coupon: coupon || null,
     paymentMethod,
-    paymentStatus:
-      paymentMethod === PaymentMethod.COD
-        ? PaymentStatus.PENDING
-        : PaymentStatus.PENDING,
+    paymentStatus: PaymentStatus.PENDING,
     status: OrderStatus.PENDING,
-statusHistory: [
-  {
-    status: OrderStatus.PENDING,
-    changedAt: new Date(),
-    note: 'Order placed',
-    changedBy: changedBy ?? new Types.ObjectId('000000000000000000000000'),
-  },
-],
+    statusHistory: [
+      {
+        status: OrderStatus.PENDING,
+        changedAt: new Date(),
+        note: 'تم إنشاء الطلب بنجاح',
+        changedBy: changedBy || userId,
+      },
+    ],
     notes,
   };
 }
 
-export function buildStatusHistoryEntry(
-  status: OrderStatus,
-  note?: string,
-  changedBy: Types.ObjectId | null = null,
-) {
-  return { status, changedAt: new Date(), note, changedBy };
+export function buildStatusHistoryEntry(status: OrderStatus, note?: string, changedBy?: Types.ObjectId) {
+  return {
+    status,
+    changedAt: new Date(),
+    note: note || `حالة الطلب تغيرت إلى ${status}`,
+    changedBy,
+  };
 }

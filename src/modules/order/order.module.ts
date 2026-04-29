@@ -4,26 +4,17 @@ import { Order, OrderSchema } from '../../models/order/order.schema';
 import { OrderRepository } from '../../models/order/order.repository';
 import { OrderService } from './order.service';
 import { OrderController } from './order.controller';
-import { CartModule } from '@modules/cart/cart.module';
-import { ProductModule } from '@modules/product/product.module';
-import { NotificationModule } from '@modules/notification/notification.module';
-
-/**
- * Import and add your CartModule, ProductModule, CouponModule, etc.
- * here as needed. Example:
- *
- * import { CartModule } from '../cart/cart.module';
- * import { ProductModule } from '../product/product.module';
- */
+import { CartModule } from '../cart/cart.module'; // مثال
+import { ProductModule } from '../product/product.module'; // مثال
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Order.name, schema: OrderSchema }]),
     CartModule,
     ProductModule,
-    // CouponModule,
-    // UserModule,
-    NotificationModule,
+    // CouponsModule,
+    // UsersModule,
+    // NotificationsModule,
   ],
   controllers: [OrderController],
   providers: [OrderService, OrderRepository],
