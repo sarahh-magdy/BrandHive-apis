@@ -17,7 +17,6 @@ import { UserMongoModule } from '@shared/index';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrderModule } from './modules/order/order.module';
-import { ReviewModule } from './modules/review/review.module';
 @Module({
   imports: [
     ConfigModule.forRoot({  
@@ -39,7 +38,6 @@ import { ReviewModule } from './modules/review/review.module';
     WishlistModule, 
     CartModule,
     OrderModule,
-    ReviewModule,
 
   ],
   controllers: [AppController],
