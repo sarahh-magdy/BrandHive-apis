@@ -16,6 +16,7 @@ import { AdminSeed } from './seeds/admin.seed';
 import { UserMongoModule } from '@shared/index';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { CartModule } from './modules/cart/cart.module';
+import { OrderModule } from './modules/order/order.module';
 @Module({
   imports: [
     ConfigModule.forRoot({  
@@ -36,6 +37,8 @@ import { CartModule } from './modules/cart/cart.module';
     CustomerModule,
     WishlistModule, 
     CartModule,
+    OrderModule,
+    
 
   ],
   controllers: [AppController],
