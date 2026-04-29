@@ -4,11 +4,13 @@ import { OrderStatus, PaymentMethod, PaymentStatus } from '../../../models/order
 export function buildOrderFromCart(params: any) {
   const { userId, orderNumber, cartItems, shippingAddress, pricing, paymentMethod, coupon, notes, changedBy } = params;
 
+  // التعديل هنا: الـ cartItems اللي راجعة من mapCart في السيرفس
+  // بيكون شكلها مختلف، لازم نتأكد من المسميات
   const items = cartItems.map((item: any) => ({
-    productId: item.product,
-    sellerId: item.sellerId, // تأكدي إن الـ Cart Item فيها sellerId
-    name: item.name,
-    image: item.image || '',
+    productId: item.productId || item.product, // التأكد من الأيدي
+    sellerId: item.sellerId,
+    name: item.productName || item.name, // mapCart بترجع productName
+    image: item.productImage || item.image || '',
     quantity: item.quantity,
     unitPrice: item.lockedDiscountPrice ?? item.lockedPrice,
     totalPrice: (item.lockedDiscountPrice ?? item.lockedPrice) * item.quantity,
@@ -20,11 +22,7 @@ export function buildOrderFromCart(params: any) {
     userId,
     orderNumber,
     items,
-    shippingAddress: {
-      ...shippingAddress,
-      country: shippingAddress.country || 'Egypt',
-      postalCode: shippingAddress.postalCode || '',
-    },
+    shippingAddress,
     pricing: {
       subtotal: pricing.subtotal,
       shippingFee: pricing.shippingFee,

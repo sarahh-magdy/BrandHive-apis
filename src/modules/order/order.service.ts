@@ -16,14 +16,30 @@ import { AdminGetOrdersDto, GetOrdersDto } from './dto/get-orders.dto';
 import { buildOrderFromCart, buildStatusHistoryEntry } from './factory';
 import { calculateShippingFee } from '../../common/helpers/shipping.helper';
 
+
 interface ICartService { 
-  getCartForOrder(userId: string): Promise<any>; // أضفنا دي
-  getActiveCart(userId: string): Promise<any>; 
-  clearCart(userId: string): Promise<void>; 
-}interface IProductService { findById(productId: string): Promise<any>; reduceStock(productId: string, qty: number): Promise<void>; }
-interface ICouponService { validateAndApply(code: string, userId: string, subtotal: number): Promise<any>; markUsed(code: string, userId: string): Promise<void>; }
-interface INotificationService { send(event: string, payload: any): Promise<void>; }
-interface IUserService { findById(userId: string): Promise<any>; getDefaultAddress(userId: string): Promise<any>; }
+  getCartForOrder(userId: string): Promise<any>; 
+  getCart(userId: string): Promise<any>; // مطابقة لملف cart.service
+  clearCart(userId: string): Promise<any>; // مطابقة لأنها بترجع {message: ...}
+}
+interface IProductService { 
+  findById(productId: string): Promise<any>; 
+  reduceStock?(productId: string, qty: number): Promise<void>; // تأكدي من وجود الـ ? هنا
+}
+
+interface ICouponService { 
+  validateAndApply(code: string, userId: string, subtotal: number): Promise<any>; 
+  markUsed(code: string, userId: string): Promise<void>; 
+}
+
+interface INotificationService { 
+  send(event: string, payload: any): Promise<void>; 
+}
+
+interface IUserService { 
+  findById(userId: string): Promise<any>; 
+  getDefaultAddress(userId: string): Promise<any>; 
+}
 
 @Injectable()
 export class OrderService {
@@ -37,6 +53,9 @@ export class OrderService {
 
   constructor(private readonly orderRepository: OrderRepository) {}
 
+  // ════════════════════════════════════════════════════════════════
+  // CREATE ORDER
+  // ════════════════════════════════════════════════════════════════
   async createOrder(
     userId: string,
     dto: CreateOrderDto,
@@ -46,32 +65,60 @@ export class OrderService {
     userService?: IUserService,
     notificationService?: INotificationService,
   ): Promise<OrderDocument> {
-const cart = await cartService.getCartForOrder(userId);
-    if (!cart || !cart.items?.length) throw new BadRequestException('السلّة فارغة');
-
-    for (const item of cart.items) {
-      const product = await productService.findById(String(item.product));
-      if (!product || product.stock < item.quantity) throw new BadRequestException(`مشكلة في مخزون ${product?.name}`);
+    
+    // ✅ نستخدم cartService مباشرة لأنه ممرر كـ parameter (وليس this.cartService)
+    const cart = await cartService.getCartForOrder(userId);
+    
+    if (!cart || !cart.items?.length) {
+      throw new BadRequestException('السلّة فارغة');
     }
 
+    // التحقق من المخزون لكل منتج
+    for (const item of cart.items) {
+      const product = await productService.findById(String(item.product));
+      if (!product || product.stock < item.quantity) {
+        throw new BadRequestException(`مشكلة في مخزون ${product?.name || 'المنتج'}`);
+      }
+    }
+
+    // معالجة عنوان الشحن
     let shippingAddress = dto.shippingAddress;
     if (!shippingAddress && dto.savedAddressId && userService) {
       shippingAddress = await userService.getDefaultAddress(userId);
     }
-    if (!shippingAddress) throw new BadRequestException('عنوان الشحن مطلوب');
+    
+    if (!shippingAddress) {
+      throw new BadRequestException('عنوان الشحن مطلوب');
+    }
 
-    const subtotal = cart.items.reduce((acc, item) => acc + (item.lockedDiscountPrice ?? item.lockedPrice) * item.quantity, 0);
-    const { fee: shippingFee } = calculateShippingFee({ governorate: shippingAddress.governorate, subtotal });
+    // الحسابات المالية
+    const subtotal = cart.items.reduce(
+      (acc, item) => acc + (item.lockedDiscountPrice ?? item.lockedPrice) * item.quantity, 
+      0
+    );
+    
+    const { fee: shippingFee } = calculateShippingFee({ 
+      governorate: shippingAddress.governorate, 
+      subtotal 
+    });
 
+    // معالجة الكوبون إن وجد
     let discount = 0;
-    let couponSnapshot: any = null; // الحل للخطأ رقم 3
+    let couponSnapshot: any = null;
     if (dto.couponCode && couponService) {
       const res = await couponService.validateAndApply(dto.couponCode, userId, subtotal);
       discount = res.discountAmount;
-      couponSnapshot = { code: dto.couponCode, discountAmount: discount, type: res.type, value: res.value };
+      couponSnapshot = { 
+        code: dto.couponCode, 
+        discountAmount: discount, 
+        type: res.type, 
+        value: res.value 
+      };
     }
 
     const orderNumber = await this.orderRepository.generateOrderNumber();
+    
+    // بناء بيانات الطلب من المصنع
     const orderData = buildOrderFromCart({
       userId: new Types.ObjectId(userId),
       orderNumber,
@@ -86,16 +133,20 @@ const cart = await cartService.getCartForOrder(userId);
 
     const order = await this.orderRepository.create(orderData);
 
-    await Promise.all([
-      ...cart.items.map(item => productService.reduceStock(String(item.product), item.quantity)),
-      cartService.clearCart(userId),
-      dto.couponCode && couponService ? couponService.markUsed(dto.couponCode, userId) : Promise.resolve(),
-    ]);
+await Promise.all([
+  ...cart.items.map(item => productService.reduceStock?.(String(item.productId), item.quantity)),
+  cartService.clearCart(userId),
+  dto.couponCode && couponService ? couponService.markUsed(dto.couponCode, userId) : Promise.resolve(),
+]);
 
     return order;
   }
 
-  async adminGetAllOrders(dto: AdminGetOrdersDto) { // الحل للخطأ رقم 2
+  // ════════════════════════════════════════════════════════════════
+  // ADMIN & USER METHODS
+  // ════════════════════════════════════════════════════════════════
+
+  async adminGetAllOrders(dto: AdminGetOrdersDto) {
     const filters: any = this.buildFilters(dto);
     const sort = this.buildSort(dto);
     const { data, total } = await this.orderRepository.findAll(filters, {
@@ -107,7 +158,7 @@ const cart = await cartService.getCartForOrder(userId);
   }
 
   async getUserOrders(userId: string, dto: GetOrdersDto) {
-    const sort = this.buildSort(dto); // الحل للخطأ رقم 4
+    const sort = this.buildSort(dto);
     const { data, total } = await this.orderRepository.findByUser(userId, this.buildFilters(dto), { 
       page: dto.page!, 
       limit: dto.limit!, 
@@ -118,7 +169,9 @@ const cart = await cartService.getCartForOrder(userId);
 
   async getOrderDetails(orderId: string, userId: string, isAdmin = false) {
     const order = await this.orderRepository.findById(orderId);
-    if (!order || (!isAdmin && String(order.userId) !== userId)) throw new NotFoundException();
+    if (!order || (!isAdmin && String(order.userId) !== userId)) {
+      throw new NotFoundException('الطلب غير موجود');
+    }
     return order;
   }
 
@@ -134,7 +187,9 @@ const cart = await cartService.getCartForOrder(userId);
   async updateOrderStatus(orderId: string, dto: UpdateOrderStatusDto, adminId: string, notificationService?: INotificationService) {
     const order = await this.orderRepository.findById(orderId);
     if (!order) throw new NotFoundException('الطلب غير موجود');
-    if (!this.ALLOWED_TRANSITIONS[order.status].includes(dto.status)) throw new BadRequestException('انتقال غير مسموح');
+    if (!this.ALLOWED_TRANSITIONS[order.status].includes(dto.status)) {
+      throw new BadRequestException('انتقال غير مسموح لهذه الحالة');
+    }
     return this.orderRepository.update(orderId, {
       status: dto.status,
       $push: { statusHistory: buildStatusHistoryEntry(dto.status, dto.note, new Types.ObjectId(adminId)) },
@@ -143,16 +198,26 @@ const cart = await cartService.getCartForOrder(userId);
 
   async cancelOrder(orderId: string, userId: string, isAdmin = false, note?: string, productService?: IProductService) {
     const order = await this.orderRepository.findById(orderId);
-    if (!order || (!isAdmin && String(order.userId) !== userId)) throw new ForbiddenException();
-    if ([OrderStatus.SHIPPED, OrderStatus.DELIVERED].includes(order.status)) throw new BadRequestException('تم الشحن بالفعل');
+    if (!order || (!isAdmin && String(order.userId) !== userId)) {
+      throw new ForbiddenException('غير مسموح لك بإلغاء هذا الطلب');
+    }
+    if ([OrderStatus.SHIPPED, OrderStatus.DELIVERED].includes(order.status)) {
+      throw new BadRequestException('لا يمكن إلغاء الطلب بعد الشحن أو التوصيل');
+    }
     
     const updated = await this.orderRepository.update(orderId, {
       status: OrderStatus.CANCELED,
-      $push: { statusHistory: buildStatusHistoryEntry(OrderStatus.CANCELED, note || 'Canceled', new Types.ObjectId(userId)) },
+      $push: { statusHistory: buildStatusHistoryEntry(OrderStatus.CANCELED, note || 'Canceled by user', new Types.ObjectId(userId)) },
     });
-    if (productService) await Promise.all(order.items.map(item => productService.reduceStock(String(item.productId), -item.quantity)));
+    
+
+if (productService) {
+  await Promise.all(order.items.map(item => productService.reduceStock?.(String(item.productId), -item.quantity)));    
+}  
     return updated!;
   }
+
+  // ─── Private Helpers ──────────────────────────────────────────
 
   private buildFilters(dto: any) {
     const f: any = {};
