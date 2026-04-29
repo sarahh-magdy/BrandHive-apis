@@ -347,11 +347,11 @@ try {
 
   //  CHANGE PASSWORD 
   async changePassword(userId: string, dto: UpdatePasswordDto) {
-    const user = await this.userRepository.findById(userId, '+password');
-
+  const user = await this.userRepository.findByIdWithPassword(userId);
     if (!user)
       throw new NotFoundException('User not found');
-
+  console.log("user:", user);
+  console.log("password:", user?.password);
     const match = await bcrypt.compare(dto.oldPassword, user.password);
 
     if (!match)
@@ -365,6 +365,7 @@ try {
     });
 
     return { message: 'Password changed' };
+
   }
 
   //  PROFILE 

@@ -20,10 +20,18 @@ export class UserRepository {
     return this.userModel.findOne(filter).select(select || '').exec();
   }
 
-  async findById(id: string, select?: string): Promise<UserDocument | null> {
-    return this.userModel.findById(id).select(select || '').exec();
+async findById(id: string, select?: string): Promise<UserDocument | null> {
+  const query = this.userModel.findById(id);
+
+  if (select) {
+    query.select(select);
   }
 
+  return query.exec();
+}
+async findByIdWithPassword(id: string): Promise<UserDocument | null> {
+  return this.userModel.findById(id).select('+password').exec();
+}
   async findByEmail(
     email: string,
     select?: string,
