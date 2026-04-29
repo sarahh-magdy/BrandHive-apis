@@ -1,6 +1,7 @@
   import {
     BadRequestException,
     ForbiddenException,
+    Inject,
     Injectable,
     NotFoundException,
   } from '@nestjs/common';
@@ -23,7 +24,10 @@
     generateInvoicePdf,
     generateInvoiceNumber,
   } from '../../common/helpers/invoice.helper';
+import { CartService } from '../cart/cart.service';
+import { ProductService } from '../product/product.service';
 
+import { NotificationService } from '../notification/notification.service';
   /**
    * These interfaces represent what you'd import from your Cart / Product / Coupon / User modules.
    * Replace with actual service imports when integrating.
@@ -73,15 +77,12 @@
 
   @Injectable()
   export class OrderService {
-    constructor(
-      private readonly orderRepository: OrderRepository,
-      // Inject your other services here — shown as tokens for flexibility:
-      // @Inject(CART_SERVICE) private cartService: ICartService,
-      // @Inject(PRODUCT_SERVICE) private productService: IProductService,
-      // @Inject(COUPON_SERVICE) private couponService: ICouponService,
-      // @Inject(NOTIFICATION_SERVICE) private notificationService: INotificationService,
-      // @Inject(USER_SERVICE) private userService: IUserService,
-    ) {}
+constructor(
+  private readonly orderRepository: OrderRepository,
+  private readonly cartService: CartService,
+  private readonly productService: ProductService,
+  private readonly notificationService: NotificationService,
+) {}
   async hasDeliveredOrderWithProduct(userId: string, productId: string) {
   const orders = await this.orderRepository.findByUser(
     userId,
