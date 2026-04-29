@@ -26,7 +26,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Roles } from '@common/decorators';
 import { UserRole } from '@models/index';
 import { RolesGuard } from '@common/guards';
-
+import { Req } from '@nestjs/common';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -104,15 +104,17 @@ export class AuthController {
   }
 
   // PATCH /auth/change-password
-  @UseGuards(AuthGuard)
-  @Patch('change-password')
-  @HttpCode(HttpStatus.OK)
-  changePassword(
-    @User('_id') userId: string,
-    @Body() dto: UpdatePasswordDto,
-  ) {
-    return this.authService.changePassword(userId.toString(), dto);
-  }
+@UseGuards(AuthGuard)
+@Patch('change-password')
+changePassword(
+  @Req() req,
+  @Body() dto: UpdatePasswordDto,
+) {
+  return this.authService.changePassword(
+    req.user._id.toString(),
+    dto,
+  );
+}
 
   // GET /auth/me
   @UseGuards(AuthGuard)
