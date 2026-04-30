@@ -16,26 +16,22 @@ import { AdminGetOrdersDto, GetOrdersDto } from './dto/get-orders.dto';
 import { buildOrderFromCart, buildStatusHistoryEntry } from './factory';
 import { calculateShippingFee } from '../../common/helpers/shipping.helper';
 
-
 interface ICartService { 
   getCartForOrder(userId: string): Promise<any>; 
-  getCart(userId: string): Promise<any>; // مطابقة لملف cart.service
-  clearCart(userId: string): Promise<any>; // مطابقة لأنها بترجع {message: ...}
+  getCart(userId: string): Promise<any>; 
+  clearCart(userId: string): Promise<any>; 
 }
 interface IProductService { 
   findById(productId: string): Promise<any>; 
-  reduceStock?(productId: string, qty: number): Promise<void>; // تأكدي من وجود الـ ? هنا
+  reduceStock?(productId: string, qty: number): Promise<void>; 
 }
-
 interface ICouponService { 
   validateAndApply(code: string, userId: string, subtotal: number): Promise<any>; 
   markUsed(code: string, userId: string): Promise<void>; 
 }
-
 interface INotificationService { 
   send(event: string, payload: any): Promise<void>; 
 }
-
 interface IUserService { 
   findById(userId: string): Promise<any>; 
   getDefaultAddress(userId: string): Promise<any>; 
@@ -53,9 +49,6 @@ export class OrderService {
 
   constructor(private readonly orderRepository: OrderRepository) {}
 
-  // ════════════════════════════════════════════════════════════════
-  // CREATE ORDER
-  // ════════════════════════════════════════════════════════════════
   async createOrder(
     userId: string,
     dto: CreateOrderDto,
@@ -66,22 +59,23 @@ export class OrderService {
     notificationService?: INotificationService,
   ): Promise<OrderDocument> {
     
-    // ✅ نستخدم cartService مباشرة لأنه ممرر كـ parameter (وليس this.cartService)
     const cart = await cartService.getCartForOrder(userId);
     
     if (!cart || !cart.items?.length) {
       throw new BadRequestException('السلّة فارغة');
     }
 
-    // التحقق من المخزون لكل منتج
+    // ✅ التحقق من المخزون وتصليح الـ IDs
     for (const item of cart.items) {
-      const product = await productService.findById(String(item.product));
-      if (!product || product.stock < item.quantity) {
-        throw new BadRequestException(`مشكلة في مخزون ${product?.name || 'المنتج'}`);
+      const productId = item.product?._id || item.product; 
+      console.log('Checking Product ID:', productId); 
+      
+      const product = await productService.findById(productId.toString()); 
+      if (!product) {
+        throw new NotFoundException(`Product ${productId} not found`);
       }
-    }
+    } // <--- القوس ده كان ناقص عندك!
 
-    // معالجة عنوان الشحن
     let shippingAddress = dto.shippingAddress;
     if (!shippingAddress && dto.savedAddressId && userService) {
       shippingAddress = await userService.getDefaultAddress(userId);
@@ -91,7 +85,6 @@ export class OrderService {
       throw new BadRequestException('عنوان الشحن مطلوب');
     }
 
-    // الحسابات المالية
     const subtotal = cart.items.reduce(
       (acc, item) => acc + (item.lockedDiscountPrice ?? item.lockedPrice) * item.quantity, 
       0
@@ -102,7 +95,6 @@ export class OrderService {
       subtotal 
     });
 
-    // معالجة الكوبون إن وجد
     let discount = 0;
     let couponSnapshot: any = null;
     if (dto.couponCode && couponService) {
@@ -118,7 +110,6 @@ export class OrderService {
 
     const orderNumber = await this.orderRepository.generateOrderNumber();
     
-    // بناء بيانات الطلب من المصنع
     const orderData = buildOrderFromCart({
       userId: new Types.ObjectId(userId),
       orderNumber,
@@ -133,18 +124,14 @@ export class OrderService {
 
     const order = await this.orderRepository.create(orderData);
 
-await Promise.all([
-  ...cart.items.map(item => productService.reduceStock?.(String(item.productId), item.quantity)),
-  cartService.clearCart(userId),
-  dto.couponCode && couponService ? couponService.markUsed(dto.couponCode, userId) : Promise.resolve(),
-]);
+    await Promise.all([
+      ...cart.items.map(item => productService.reduceStock?.(String(item.product?._id || item.product), item.quantity)),
+      cartService.clearCart(userId),
+      dto.couponCode && couponService ? couponService.markUsed(dto.couponCode, userId) : Promise.resolve(),
+    ]);
 
     return order;
   }
-
-  // ════════════════════════════════════════════════════════════════
-  // ADMIN & USER METHODS
-  // ════════════════════════════════════════════════════════════════
 
   async adminGetAllOrders(dto: AdminGetOrdersDto) {
     const filters: any = this.buildFilters(dto);
@@ -210,14 +197,11 @@ await Promise.all([
       $push: { statusHistory: buildStatusHistoryEntry(OrderStatus.CANCELED, note || 'Canceled by user', new Types.ObjectId(userId)) },
     });
     
-
-if (productService) {
-  await Promise.all(order.items.map(item => productService.reduceStock?.(String(item.productId), -item.quantity)));    
-}  
+    if (productService) {
+      await Promise.all(order.items.map(item => productService.reduceStock?.(String(item.productId), -item.quantity)));    
+    }  
     return updated!;
   }
-
-  // ─── Private Helpers ──────────────────────────────────────────
 
   private buildFilters(dto: any) {
     const f: any = {};
