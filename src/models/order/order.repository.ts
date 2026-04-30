@@ -9,7 +9,7 @@ export class OrderRepository {
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
   ) {}
 
-  async create(data: any): Promise<OrderDocument> {
+  async create(data: Partial<Order>): Promise<OrderDocument> {
     const order = new this.orderModel(data);
     return order.save();
   }
@@ -33,13 +33,19 @@ export class OrderRepository {
     filters: QueryFilter<OrderDocument> = {},
     options: { page: number; limit: number; sort?: Record<string, 1 | -1> },
   ): Promise<{ data: OrderDocument[]; total: number }> {
-    const query = { userId, isDeleted: false, ...filters };
+    const query: QueryFilter<OrderDocument> = {
+      userId,
+      isDeleted: false,
+      ...filters,
+    };
+
+    const sort = options.sort ?? { createdAt: -1 };
     const skip = (options.page - 1) * options.limit;
 
     const [data, total] = await Promise.all([
       this.orderModel
         .find(query)
-        .sort(options.sort || { createdAt: -1 })
+        .sort(sort)
         .skip(skip)
         .limit(options.limit)
         .lean()
@@ -55,7 +61,12 @@ export class OrderRepository {
     filters: QueryFilter<OrderDocument> = {},
     options: { page: number; limit: number },
   ): Promise<{ data: OrderDocument[]; total: number }> {
-    const query = { 'items.sellerId': sellerId, isDeleted: false, ...filters };
+    const query: QueryFilter<OrderDocument> = {
+      'items.sellerId': sellerId,
+      isDeleted: false,
+      ...filters,
+    };
+
     const skip = (options.page - 1) * options.limit;
 
     const [data, total] = await Promise.all([
@@ -73,16 +84,17 @@ export class OrderRepository {
   }
 
   async findAll(
-    filters: any = {},
-    options: { page: number; limit: number; sort?: any },
+    filters: QueryFilter<OrderDocument> = {},
+    options: { page: number; limit: number; sort?: Record<string, 1 | -1> },
   ): Promise<{ data: OrderDocument[]; total: number }> {
-    const query = { isDeleted: false, ...filters };
+    const query: QueryFilter<OrderDocument> = { isDeleted: false, ...filters };
+    const sort = options.sort ?? { createdAt: -1 };
     const skip = (options.page - 1) * options.limit;
 
     const [data, total] = await Promise.all([
       this.orderModel
         .find(query)
-        .sort(options.sort || { createdAt: -1 })
+        .sort(sort)
         .skip(skip)
         .limit(options.limit)
         .populate('userId', 'name email')
@@ -94,18 +106,16 @@ export class OrderRepository {
     return { data: data as OrderDocument[], total };
   }
 
-  async update(id: string, update: UpdateQuery<OrderDocument>): Promise<OrderDocument | null> {
-    return this.orderModel.findByIdAndUpdate(id, update, { new: true }).exec();
+  async update(
+    id: string,
+    update: UpdateQuery<OrderDocument>,
+  ): Promise<OrderDocument | null> {
+    return this.orderModel
+      .findByIdAndUpdate(id, update, { new: true })
+      .exec();
   }
 
-  async generateOrderNumber(): Promise<string> {
-    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `ORD-${datePart}-${randomPart}`;
-  }
-
-  // Dashboard Aggregations
-  async countByStatus(): Promise<any[]> {
+  async countByStatus(): Promise<{ status: string; count: number }[]> {
     return this.orderModel.aggregate([
       { $match: { isDeleted: false } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -113,7 +123,11 @@ export class OrderRepository {
     ]);
   }
 
-  async revenueStats(): Promise<any> {
+  async revenueStats(): Promise<{
+    totalRevenue: number;
+    totalOrders: number;
+    avgOrderValue: number;
+  }> {
     const result = await this.orderModel.aggregate([
       { $match: { isDeleted: false, status: { $ne: OrderStatus.CANCELED } } },
       {
@@ -125,6 +139,43 @@ export class OrderRepository {
         },
       },
     ]);
+
     return result[0] ?? { totalRevenue: 0, totalOrders: 0, avgOrderValue: 0 };
+  }
+
+  async revenueByPeriod(
+    from: Date,
+    to: Date,
+  ): Promise<{ date: string; revenue: number; count: number }[]> {
+    return this.orderModel.aggregate([
+      {
+        $match: {
+          isDeleted: false,
+          status: { $ne: OrderStatus.CANCELED },
+          createdAt: { $gte: from, $lte: to },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          revenue: { $sum: '$pricing.total' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+      { $project: { date: '$_id', revenue: 1, count: 1, _id: 0 } },
+    ]);
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.orderModel.findByIdAndUpdate(id, { isDeleted: true });
+  }
+
+  async generateOrderNumber(): Promise<string> {
+    const today = new Date();
+    const datePart = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const count = await this.orderModel.countDocuments();
+    const seq = String(count + 1).padStart(4, '0');
+    return `ORD-${datePart}-${seq}`;
   }
 }
