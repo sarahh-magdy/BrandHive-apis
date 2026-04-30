@@ -1,13 +1,22 @@
-import { IsNotEmpty, IsOptional, IsString, MinLength, IsObject } from "class-validator";
+
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+  ValidateNested
+} from "class-validator";
+import { Type } from "class-transformer";
+import { LogoDto } from "./logo.dto";
 
 export class CreateCategoryDto {
-    @IsString()
-    @IsNotEmpty()
-    @MinLength(3)
-    name: string;
-    
-    // TODO: Add validation for logo
-    @IsOptional()
-    @IsObject()
-    logo: Record<string, any>;
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(3)
+  name: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LogoDto)
+  logo?: LogoDto;
 }

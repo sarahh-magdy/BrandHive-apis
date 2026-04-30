@@ -7,20 +7,40 @@ import { CategoryRepository } from 'src/models/category/category.repository';
 import { Category } from './entities/category.entity';
 import { Types } from 'mongoose';
 import { GetCategoriesDto } from './dto/get-category.dto';
-
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { v2 as cloudinary } from 'cloudinary';
 @Injectable()
 export class CategoryService {
   constructor(private readonly categoryRepository: CategoryRepository) {}
 
 //CREATE
-  async create(category: Category) {
-    const categoryExist = await this.categoryRepository.getOne({ slug: category.slug });
-    if (categoryExist) {
-      throw new ConflictException('Category already exists');
-    }
-    return await this.categoryRepository.create({ ...category });
+async create(category: Category, file?: Express.Multer.File) {
+  let logoData;
+
+  if (file) {
+    const result = await cloudinary.uploader.upload(file.path, {
+      folder: 'categories/logos',
+    });
+
+    logoData = {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
   }
 
+  const categoryExist = await this.categoryRepository.getOne({
+    slug: category.slug,
+  });
+
+  if (categoryExist) {
+    throw new ConflictException('Category already exists');
+  }
+
+  return await this.categoryRepository.create({
+    ...category,
+    logo: logoData,
+  });
+}
 //GET ALL
   async findAll(query: GetCategoriesDto) {
     const { page = 1, limit = 10, search } = query;
@@ -64,25 +84,58 @@ export class CategoryService {
   }
 
 //UPDATE
-  async update(id: string, category: Category) {
-    const categoryExist = await this.categoryRepository.getOne({
-      slug: category.slug,
-      _id: { $ne: new Types.ObjectId(id) },
-      isDeleted: false,
-    });
-    if (categoryExist) {
-      throw new ConflictException('Category name already exists');
-    }
-    const updated = await this.categoryRepository.updateOne(
-      { _id: new Types.ObjectId(id), isDeleted: false },
-      category,
-      { new: true },
-    );
-    if (!updated) {
-      throw new NotFoundException('Category not found');
-    }
-    return updated;
+async update(id: string, category: Category, file?: Express.Multer.File) {
+
+  const existingCategory = await this.categoryRepository.getOne({
+    _id: new Types.ObjectId(id),
+    isDeleted: false,
+  });
+
+  if (!existingCategory) {
+    throw new NotFoundException('Category not found');
   }
+
+  // 🔥 لو فيه صورة جديدة
+  if (file) {
+    // 🗑️ امسحي القديمة
+    if (existingCategory.logo?.publicId) {
+      await cloudinary.uploader.destroy(existingCategory.logo.publicId);
+    }
+
+    // ⬆️ ارفعي الجديدة
+    const result = await cloudinary.uploader.upload(file.path, {
+      folder: 'categories/logos',
+    });
+
+    category.logo = {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
+  }
+
+  // check slug uniqueness
+  const categoryExist = await this.categoryRepository.getOne({
+    slug: category.slug,
+    _id: { $ne: new Types.ObjectId(id) },
+    isDeleted: false,
+  });
+
+  if (categoryExist) {
+    throw new ConflictException('Category name already exists');
+  }
+
+  const updated = await this.categoryRepository.updateOne(
+    { _id: new Types.ObjectId(id), isDeleted: false },
+    category,
+    { new: true },
+  );
+
+  if (!updated) {
+    throw new NotFoundException('Category not found');
+  }
+
+  return updated;
+}
 
 //DELETE
   async delete(id: string, userId: Types.ObjectId) {

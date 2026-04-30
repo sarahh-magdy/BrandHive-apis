@@ -17,6 +17,8 @@ import { CategoryFactoryService } from './factory';
 import { Auth } from '@common/decorators';
 import { AuthGuard } from '@common/guards';
 import { GetCategoriesDto } from './dto/get-category.dto';
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('category')
 @UseGuards(AuthGuard)
@@ -27,32 +29,45 @@ export class CategoryController {
   ) {}
 
   // Admin Only
-  @Post()
-  @Auth(['Admin' ])
-  async create(@Body() createCategoryDto: CreateCategoryDto, @User() user: any) {
-    const category = this.categoryFactoryService.createCategory(createCategoryDto, user);
-    const categoryCreated = await this.categoryService.create(category);
-    return {
-      success: true,
-      message: 'Category created successfully',
-      data: categoryCreated,
-    };
-  }
-  @Put(':id')
-  @Auth(['Admin'])
-  async update(
-    @Param('id') id: string,
-    @Body() updateCategoryDto: UpdateCategoryDto,
-    @User() user: any,
-  ) {
-    const category = await this.categoryFactoryService.updateCategory(id, updateCategoryDto, user);
-    const updatedCategory = await this.categoryService.update(id, category);
-    return {
-      success: true,
-      message: 'Category updated successfully',
-      data: updatedCategory,
-    };
-  }
+@Post()
+@Auth(['Admin'])
+@UseInterceptors(FileInterceptor('logo'))
+async create(
+  @UploadedFile() file: Express.Multer.File,
+  @Body() createCategoryDto: CreateCategoryDto,
+  @User() user: any,
+) {
+  const category = this.categoryFactoryService.createCategory(createCategoryDto, user);
+
+  const categoryCreated = await this.categoryService.create(category, file);
+
+  return {
+    success: true,
+    message: 'Category created successfully',
+    data: categoryCreated,
+  };
+}
+
+
+@Put(':id')
+@Auth(['Admin'])
+@UseInterceptors(FileInterceptor('logo'))
+async update(
+  @Param('id') id: string,
+  @UploadedFile() file: Express.Multer.File,
+  @Body() updateCategoryDto: UpdateCategoryDto,
+  @User() user: any,
+) {
+  const category = await this.categoryFactoryService.updateCategory(id, updateCategoryDto, user);
+
+  const updatedCategory = await this.categoryService.update(id, category, file);
+
+  return {
+    success: true,
+    message: 'Category updated successfully',
+    data: updatedCategory,
+  };
+}
 
   @Delete(':id')
   @Auth(['Admin'])

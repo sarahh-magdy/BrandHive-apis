@@ -21,7 +21,6 @@ export class CategoryFactoryService {
     });
     category.createdBy = user._id;
     category.updatedBy = user._id;
-    category.logo = createCategoryDto.logo;
     return category;
   }
 
