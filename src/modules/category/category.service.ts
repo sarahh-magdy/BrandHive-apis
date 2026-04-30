@@ -9,25 +9,41 @@ import { Types } from 'mongoose';
 import { GetCategoriesDto } from './dto/get-category.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { v2 as cloudinary } from 'cloudinary';
+import { Readable } from 'stream';
 @Injectable()
 export class CategoryService {
   constructor(private readonly categoryRepository: CategoryRepository) {}
 
 //CREATE
+
 async create(category: Category, file?: Express.Multer.File) {
-  console.log(file);
-let logoData;
 
-if (file && file.path) {
-  const result = await cloudinary.uploader.upload(file.path, {
-    folder: 'categories/logos',
-  });
+  let logoData;
 
-  logoData = {
-    url: result.secure_url,
-    publicId: result.public_id,
-  };
-}
+  if (file) {
+    const streamUpload = () =>
+      new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'categories/logos' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          },
+        );
+
+        const readable = new Readable();
+        readable.push(file.buffer);
+        readable.push(null);
+        readable.pipe(stream);
+      });
+
+    const result: any = await streamUpload();
+
+    logoData = {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
+  }
 
   const categoryExist = await this.categoryRepository.getOne({
     slug: category.slug,

@@ -27,9 +27,17 @@ export class Category {
   @Prop({ type: Date, default: null })
   deletedAt: Date;
 
-  @Prop({ type: Object, default: null })
-  logo: object;
-}
+@Prop({
+  type: {
+    url: String,
+    publicId: String,
+  },
+  default: null,
+})
+logo: {
+  url: string;
+  publicId: string;
+};}
 
 export const CategorySchema = SchemaFactory.createForClass(Category);
 CategorySchema.index({ name: 'text', slug: 'text' });
