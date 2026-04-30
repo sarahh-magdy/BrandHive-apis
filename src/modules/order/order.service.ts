@@ -65,16 +65,14 @@ export class OrderService {
       throw new BadRequestException('السلّة فارغة');
     }
 
-    // ✅ التحقق من المخزون وتصليح الـ IDs
+    // التحقق من المنتجات في السلة (السلة تستخدم حقل product عادةً)
     for (const item of cart.items) {
       const productId = item.product?._id || item.product; 
-      console.log('Checking Product ID:', productId); 
-      
       const product = await productService.findById(productId.toString()); 
       if (!product) {
         throw new NotFoundException(`Product ${productId} not found`);
       }
-    } // <--- القوس ده كان ناقص عندك!
+    }
 
     let shippingAddress = dto.shippingAddress;
     if (!shippingAddress && dto.savedAddressId && userService) {
@@ -122,15 +120,26 @@ export class OrderService {
       changedBy: new Types.ObjectId(userId),
     });
 
-    const order = await this.orderRepository.create(orderData);
+    try {
+      const order = await this.orderRepository.create(orderData);
 
-    await Promise.all([
-      ...cart.items.map(item => productService.reduceStock?.(String(item.product?._id || item.product), item.quantity)),
-      cartService.clearCart(userId),
-      dto.couponCode && couponService ? couponService.markUsed(dto.couponCode, userId) : Promise.resolve(),
-    ]);
+      await Promise.all([
+        ...cart.items.map(item => {
+          const pId = item.product?._id || item.product;
+          if (productService.reduceStock) {
+            return productService.reduceStock(pId.toString(), item.quantity);
+          }
+          return Promise.resolve();
+        }),
+        cartService.clearCart(userId.toString()),
+        dto.couponCode && couponService ? couponService.markUsed(dto.couponCode, userId.toString()) : Promise.resolve(),
+      ]);
 
-    return order;
+      return order;
+    } catch (error) {
+      console.error('CRITICAL ERROR DURING ORDER CREATION:', error);
+      throw error;
+    }
   }
 
   async adminGetAllOrders(dto: AdminGetOrdersDto) {
@@ -198,7 +207,11 @@ export class OrderService {
     });
     
     if (productService) {
-      await Promise.all(order.items.map(item => productService.reduceStock?.(String(item.productId), -item.quantity)));    
+      // ✅ التعديل هنا: استخدام productId كما هو معرف في الـ OrderSchema
+      await Promise.all(order.items.map(item => {
+        const pId = item.productId; 
+        return productService.reduceStock?.(pId.toString(), -item.quantity);
+      }));    
     }  
     return updated!;
   }
