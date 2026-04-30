@@ -97,19 +97,19 @@ async update(id: string, category: Category, file?: Express.Multer.File) {
   }
 
   if (file) {
-    if (existingCategory.logo?.publicId) {
-      await cloudinary.uploader.destroy(existingCategory.logo.publicId);
-    }
-
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: 'categories/logos',
-    });
-
-    category.logo = {
-      url: result.secure_url,
-      publicId: result.public_id,
-    };
+  if (existingCategory.logo?.publicId) {
+    await cloudinary.uploader.destroy(existingCategory.logo.publicId);
   }
+
+  const result = await cloudinary.uploader.upload(file.path, {
+    folder: 'categories/logos',
+  });
+
+  category.logo = {
+    url: result.secure_url,
+    publicId: result.public_id,
+  };
+}
 
   // check slug uniqueness
   const categoryExist = await this.categoryRepository.getOne({

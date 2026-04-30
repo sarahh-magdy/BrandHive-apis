@@ -6,7 +6,10 @@ export class Category {
   slug: string;
   createdBy: Types.ObjectId;
   updatedBy: Types.ObjectId;
-  logo: object;
+  logo?: {
+    url: string;
+    publicId: string;
+  };
   isDeleted: boolean;
   deletedBy: Types.ObjectId;
   deletedAt: Date;

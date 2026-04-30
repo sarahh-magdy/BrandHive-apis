@@ -42,7 +42,6 @@ export class CategoryFactoryService {
       trim: true,
       replacement: '-',
     });
-    category.logo = updateCategoryDto.logo !== undefined ? updateCategoryDto.logo : oldCategory.logo;
     category.updatedBy = user._id;
     return category;
   }
