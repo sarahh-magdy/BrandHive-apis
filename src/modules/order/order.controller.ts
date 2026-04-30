@@ -40,9 +40,12 @@ export class OrderController {
   // ════════════════════════════════════════════════════════════════
   @Post()
   async createOrder(@Req() req: any, @Body() dto: CreateOrderDto) {
-    const userId = req.user.userId; // تأكدي إن التوكن فيه userId أو id
+// ─── تعديل السطر 52 ─────────────────────────────
+const userId = req.user._id || req.user.id || req.user.userId;
 
-    // هنا بنمرر كل الخدمات اللي الـ Service محتاجها في الـ Parameters
+console.log('--- Order Controller Debug ---');
+console.log('User Object from Req:', req.user);
+console.log('Extracted UserID:', userId);
     return this.orderService.createOrder(
       userId,
       dto,
