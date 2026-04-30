@@ -15,18 +15,19 @@ export class CategoryService {
 
 //CREATE
 async create(category: Category, file?: Express.Multer.File) {
-  let logoData;
+  console.log(file);
+let logoData;
 
-  if (file) {
-    const result = await cloudinary.uploader.upload(file.path, {
-      folder: 'categories/logos',
-    });
+if (file && file.path) {
+  const result = await cloudinary.uploader.upload(file.path, {
+    folder: 'categories/logos',
+  });
 
-    logoData = {
-      url: result.secure_url,
-      publicId: result.public_id,
-    };
-  }
+  logoData = {
+    url: result.secure_url,
+    publicId: result.public_id,
+  };
+}
 
   const categoryExist = await this.categoryRepository.getOne({
     slug: category.slug,
@@ -95,14 +96,11 @@ async update(id: string, category: Category, file?: Express.Multer.File) {
     throw new NotFoundException('Category not found');
   }
 
-  // 🔥 لو فيه صورة جديدة
   if (file) {
-    // 🗑️ امسحي القديمة
     if (existingCategory.logo?.publicId) {
       await cloudinary.uploader.destroy(existingCategory.logo.publicId);
     }
 
-    // ⬆️ ارفعي الجديدة
     const result = await cloudinary.uploader.upload(file.path, {
       folder: 'categories/logos',
     });
