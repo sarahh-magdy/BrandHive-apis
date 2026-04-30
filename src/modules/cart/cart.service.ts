@@ -290,11 +290,20 @@ export class CartService {
   }
 
   // INTERNAL: used by Order module
-  async getCartForOrder(userId: string) {
-    const cart = await this.cartRepository.findCartPopulated(userId);
-    if (!cart || !(cart as any).items?.length) {
-      throw new BadRequestException('Your cart is empty');
-    }
+ async getCartForOrder(userId: string) {
+  console.log('--- Order Process Started ---');
+  console.log('Searching for Cart with UserID:', userId);
+
+  const cart = await this.cartRepository.findCartPopulated(userId);
+  
+  console.log('Cart found in DB:', cart ? 'YES' : 'NO');
+  if (cart) {
+    console.log('Number of items in cart:', cart.items?.length);
+  }
+
+  if (!cart || !(cart as any).items?.length) {
+    throw new BadRequestException('Your cart is empty');
+  }
 
     // ─── Final stock validation before order ──────────────────────
     for (const item of (cart as any).items) {
