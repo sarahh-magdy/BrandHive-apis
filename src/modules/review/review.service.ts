@@ -21,11 +21,9 @@ export class ReviewService {
     private readonly reviewFactory: ReviewFactoryService,
   ) {}
 
-  // ════════════════════════════════════════════════════════════════
   // CREATE REVIEW — Verified Purchase Only
-  // ════════════════════════════════════════════════════════════════
+  // 
   async createReview(userId: string, dto: CreateReviewDto) {
-    // ─── Product must exist ───────────────────────────────────
     const product = await this.productRepository.getOne({
       _id: new Types.ObjectId(dto.productId),
       isDeleted: false,
