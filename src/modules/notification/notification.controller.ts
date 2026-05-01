@@ -1,99 +1,52 @@
 import {
   Controller,
-  Delete,
   Get,
-  Param,
   Patch,
+  Delete,
+  Param,
   Query,
-  Req,
+  UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiParam,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { GetNotificationsDto } from './dto/get-notification.dto';
-import {
-  NotificationEntity,
-  PaginatedNotificationsEntity,
-} from './entities/notification.entity';
+import { Auth } from '@common/decorators';
+import { AuthGuard } from '@common/guards';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { User } from '@common/decorators/user.decorator';
 
-@ApiTags('Notifications')
-@ApiBearerAuth()
 @Controller('notifications')
+@UseGuards(AuthGuard, RolesGuard)
+@Auth(['Customer', 'Seller', 'Admin'])
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
-  // ── User endpoints ──────────────────────────────────────────
-
-  /**
-   * GET /notifications
-   * Get current user's notifications (paginated, optional unreadOnly)
-   */
+  // GET /notifications
   @Get()
-  @ApiOperation({ summary: 'Get my notifications' })
-  @ApiResponse({ status: 200, type: PaginatedNotificationsEntity })
-  async getMyNotifications(@Req() req: any, @Query() dto: GetNotificationsDto) {
-    return this.notificationService.getUserNotifications(req.user._id, dto);
+  getNotifications(@User() user: any, @Query() query: GetNotificationsDto) {
+    return this.notificationService.getUserNotifications(user._id, query);
   }
 
-  /**
-   * GET /notifications/unread-count
-   * Unread badge count — called on every page load
-   */
+  // GET /notifications/unread-count
   @Get('unread-count')
-  @ApiOperation({ summary: 'Get unread notification count (navbar badge)' })
-  async getUnreadCount(@Req() req: any) {
-    return this.notificationService.getUnreadCount(req.user._id);
+  getUnreadCount(@User() user: any) {
+    return this.notificationService.getUnreadCount(user._id);
   }
 
-  /**
-   * PATCH /notifications/read-all
-   * Mark all as read in one shot
-   */
+  // PATCH /notifications/read-all
   @Patch('read-all')
-  @ApiOperation({ summary: 'Mark all notifications as read' })
-  async markAllAsRead(@Req() req: any) {
-    await this.notificationService.markAllAsRead(req.user._id);
-    return { success: true };
+  markAllAsRead(@User() user: any) {
+    return this.notificationService.markAllAsRead(user._id);
   }
 
-  /**
-   * PATCH /notifications/:id/read
-   * Mark single notification as read
-   */
+  // PATCH /notifications/:id/read
   @Patch(':id/read')
-  @ApiOperation({ summary: 'Mark a notification as read' })
-  @ApiParam({ name: 'id' })
-  async markAsRead(@Req() req: any, @Param('id') id: string) {
-    await this.notificationService.markAsRead(id, req.user._id);
-    return { success: true };
+  markAsRead(@Param('id') id: string, @User() user: any) {
+    return this.notificationService.markAsRead(id, user._id);
   }
 
-  /**
-   * DELETE /notifications/:id
-   * Soft delete a notification
-   */
+  // DELETE /notifications/:id
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a notification' })
-  @ApiParam({ name: 'id' })
-  async deleteNotification(@Req() req: any, @Param('id') id: string) {
-    await this.notificationService.deleteNotification(id, req.user._id);
-    return { success: true };
-  }
-
-  // ── Admin endpoints ─────────────────────────────────────────
-
-  /**
-   * DELETE /notifications/admin/cleanup
-   * Admin: purge notifications older than N days
-   */
-  @Delete('admin/cleanup')
-  @ApiOperation({ summary: '[Admin] Delete notifications older than 90 days' })
-  async cleanup() {
-    return this.notificationService.cleanupOldNotifications(90);
+  deleteNotification(@Param('id') id: string, @User() user: any) {
+    return this.notificationService.deleteNotification(id, user._id);
   }
 }

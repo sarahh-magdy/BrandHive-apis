@@ -1,7 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
-
-export type OrderDocument = Order & Document;
+import { SchemaTypes, Types } from 'mongoose';
 
 export enum OrderStatus {
   PENDING = 'pending',
@@ -13,7 +11,8 @@ export enum OrderStatus {
 
 export enum PaymentMethod {
   COD = 'cod',
-  ONLINE = 'online',
+  PAYMOB = 'paymob',
+  FAWRY = 'fawry',
 }
 
 export enum PaymentStatus {
@@ -25,137 +24,66 @@ export enum PaymentStatus {
 
 @Schema({ _id: false })
 export class OrderItem {
-  @Prop({ type: Types.ObjectId, ref: 'Product', required: true })
-  productId: Types.ObjectId;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Product', required: true })
+  product: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  sellerId: Types.ObjectId;
+  @Prop({ type: String, required: true })
+  productName: string;
 
-  @Prop({ required: true })
-  name: string;
+  @Prop({ type: String, default: null })
+  productImage: string | null;
 
-  @Prop()
-  image: string;
+  @Prop({ type: String, required: true })
+  sku: string;
 
-  @Prop({ required: true, min: 1 })
+  @Prop({ type: Number, required: true, min: 1 })
   quantity: number;
 
-  /** Price locked at order time — never changes even if product price changes */
-  @Prop({ required: true, min: 0 })
+  @Prop({ type: Number, required: true, min: 0 })
   unitPrice: number;
 
-  @Prop({ required: true, min: 0 })
-  totalPrice: number;
+  @Prop({ type: Number, default: null })
+  unitDiscountPrice: number | null;
+
+  @Prop({ type: Number, required: true })
+  itemTotal: number;
 }
 
 export const OrderItemSchema = SchemaFactory.createForClass(OrderItem);
 
 @Schema({ _id: false })
 export class ShippingAddress {
-  @Prop({ required: true })
-  fullName: string;
-
-  @Prop({ required: true })
-  phone: string;
-
-  @Prop({ required: true })
-  street: string;
-
-  @Prop({ required: true })
-  city: string;
-
-  @Prop({ required: true })
-  governorate: string;
-
-  @Prop()
-  postalCode: string;
-
-  @Prop({ default: 'Egypt' })
-  country: string;
+  @Prop({ type: String, required: true }) fullName: string;
+  @Prop({ type: String, required: true }) phone: string;
+  @Prop({ type: String, required: true }) street: string;
+  @Prop({ type: String, required: true }) city: string;
+  @Prop({ type: String, required: true }) governorate: string;
+  @Prop({ type: String, default: null }) postalCode: string | null;
+  @Prop({ type: String, default: 'Egypt' }) country: string;
 }
 
 export const ShippingAddressSchema = SchemaFactory.createForClass(ShippingAddress);
 
 @Schema({ _id: false })
-export class PriceSummary {
-  @Prop({ required: true, min: 0 })
-  subtotal: number;
-
-  @Prop({ default: 0, min: 0 })
-  shippingFee: number;
-
-  @Prop({ default: 0, min: 0 })
-  discount: number;
-
-  @Prop({ default: 0, min: 0 })
-  tax: number;
-
-  @Prop({ required: true, min: 0 })
-  total: number;
+export class StatusHistory {
+  @Prop({ type: String, enum: OrderStatus, required: true }) status: OrderStatus;
+  @Prop({ type: Date, default: () => new Date() }) changedAt: Date;
+  @Prop({ type: String, default: null }) note: string | null;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', default: null }) changedBy: Types.ObjectId | null;
 }
 
-export const PriceSummarySchema = SchemaFactory.createForClass(PriceSummary);
+export const StatusHistorySchema = SchemaFactory.createForClass(StatusHistory);
 
-@Schema({ _id: false })
-export class CouponSnapshot {
-  @Prop({ required: true })
-  code: string;
-
-  @Prop({ required: true })
-  discountAmount: number;
-
-  @Prop({ enum: ['percentage', 'fixed'], required: true })
-  type: string;
-
-  @Prop()
-  value: number;
-}
-
-export const CouponSnapshotSchema = SchemaFactory.createForClass(CouponSnapshot);
-
-@Schema({ _id: false })
-export class StatusHistoryEntry {
-  @Prop({ enum: OrderStatus, required: true })
-  status: OrderStatus;
-
-  @Prop({ default: () => new Date() })
-  changedAt: Date;
-
-  @Prop()
-  note: string;
-
-  @Prop({ type: Types.ObjectId, ref: 'User' })
-  changedBy: Types.ObjectId;
-}
-
-export const StatusHistoryEntrySchema = SchemaFactory.createForClass(StatusHistoryEntry);
-
-@Schema({ _id: false })
-export class InvoiceInfo {
-  @Prop()
-  invoiceNumber: string;
-
-  @Prop()
-  generatedAt: Date;
-
-  @Prop()
-  pdfUrl: string;
-}
-
-export const InvoiceInfoSchema = SchemaFactory.createForClass(InvoiceInfo);
-
-@Schema({
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true },
-})
+@Schema({ timestamps: true })
 export class Order {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  userId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
+  readonly _id: Types.ObjectId;
 
-  /** Human-readable order number e.g. ORD-20240115-0001 */
-  @Prop({ unique: true, required: true })
+  @Prop({ type: String, required: true, unique: true })
   orderNumber: string;
+
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
+  user: Types.ObjectId;
 
   @Prop({ type: [OrderItemSchema], required: true })
   items: OrderItem[];
@@ -163,49 +91,40 @@ export class Order {
   @Prop({ type: ShippingAddressSchema, required: true })
   shippingAddress: ShippingAddress;
 
-  @Prop({ type: PriceSummarySchema, required: true })
-  pricing: PriceSummary;
+  @Prop({ type: [StatusHistorySchema], default: [] })
+  statusHistory: StatusHistory[];
 
-  @Prop({ type: CouponSnapshotSchema, default: null })
-  coupon: CouponSnapshot | null;
-
-  @Prop({ enum: OrderStatus, default: OrderStatus.PENDING, index: true })
+  @Prop({ type: String, enum: OrderStatus, default: OrderStatus.PENDING })
   status: OrderStatus;
 
-  @Prop({ enum: PaymentMethod, required: true })
-  paymentMethod: PaymentMethod;
+  @Prop({ type: Number, required: true, min: 0 }) subtotal: number;
+  @Prop({ type: Number, default: 0, min: 0 }) shippingFee: number;
+  @Prop({ type: Number, default: 0, min: 0 }) tax: number;
+  @Prop({ type: Number, default: 0, min: 0 }) discount: number;
+  @Prop({ type: String, default: null }) couponCode: string | null;
+  @Prop({ type: Number, required: true, min: 0 }) total: number;
 
-  @Prop({ enum: PaymentStatus, default: PaymentStatus.PENDING })
-  paymentStatus: PaymentStatus;
+  @Prop({ type: String, enum: PaymentMethod, required: true }) paymentMethod: PaymentMethod;
+  @Prop({ type: String, enum: PaymentStatus, default: PaymentStatus.PENDING }) paymentStatus: PaymentStatus;
+  @Prop({ type: String, default: null }) paymentTransactionId: string | null;
+  @Prop({ type: Date, default: null }) paidAt: Date | null;
 
-  /** For online payment — store gateway transaction ref */
-  @Prop()
-  paymentTransactionId: string;
+  @Prop({ type: String, default: null }) invoiceUrl: string | null;
+  @Prop({ type: Boolean, default: false }) invoiceSent: boolean;
 
-  /** For retry payment — store payment URL */
-  @Prop()
-  paymentUrl: string;
+  @Prop({ type: String, default: null }) cancelReason: string | null;
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', default: null }) canceledBy: Types.ObjectId | null;
+  @Prop({ type: Date, default: null }) canceledAt: Date | null;
 
-  @Prop({ type: [StatusHistoryEntrySchema], default: [] })
-  statusHistory: StatusHistoryEntry[];
-
-  @Prop({ type: InvoiceInfoSchema, default: null })
-  invoice: InvoiceInfo | null;
-
-  @Prop()
-  notes: string;
-
-  @Prop({ default: false })
-  isDeleted: boolean;
-
-  // Virtual
-  createdAt: Date;
-  updatedAt: Date;
+  @Prop({ type: Date, default: null }) confirmedAt: Date | null;
+  @Prop({ type: Date, default: null }) shippedAt: Date | null;
+  @Prop({ type: Date, default: null }) deliveredAt: Date | null;
+  @Prop({ type: String, default: null }) notes: string | null;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);
 
-// ── Indexes ──────────────────────────────────────────────────────────────────
-OrderSchema.index({ userId: 1, createdAt: -1 });
-OrderSchema.index({ status: 1, createdAt: -1 });
-OrderSchema.index({ 'items.sellerId': 1, createdAt: -1 });
+OrderSchema.index({ user: 1, createdAt: -1 });
+OrderSchema.index({ status: 1 });
+OrderSchema.index({ paymentStatus: 1 });
+OrderSchema.index({ 'items.product': 1 });

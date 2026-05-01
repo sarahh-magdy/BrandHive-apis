@@ -1,217 +1,83 @@
-/**
- * Invoice Helper — Option C (Hybrid)
- *
- * Strategy:
- *  - Generate PDF in-memory using pdfkit
- *  - Save to disk (or upload to S3/cloud) then return URL
- *  - For small deployments: serve from /public/invoices/
- *  - For production: upload buffer to S3 and return presigned URL
- *
- * Install: npm install pdfkit @types/pdfkit
- */
-
-import * as path from 'path';
+import PDFDocument from 'pdfkit';
 import * as fs from 'fs';
+import * as path from 'path';
 
-export interface InvoiceData {
-  orderNumber: string;
-  invoiceNumber: string;
-  createdAt: Date;
-  customer: {
-    name: string;
-    email: string;
-    phone: string;
-  };
-  shippingAddress: {
-    fullName: string;
-    street: string;
-    city: string;
-    governorate: string;
-    country: string;
-  };
-  items: {
-    name: string;
-    quantity: number;
-    unitPrice: number;
-    totalPrice: number;
-  }[];
-  pricing: {
-    subtotal: number;
-    shippingFee: number;
-    discount: number;
-    tax: number;
-    total: number;
-  };
-  couponCode?: string;
-  paymentMethod: string;
-  paymentStatus: string;
-}
+export async function generateInvoicePDF(order: any): Promise<string> {
+  const dir = path.join(process.cwd(), 'uploads', 'invoices');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-/**
- * Generates invoice PDF and saves to disk.
- * Returns the local file path and a URL to serve it.
- *
- * In production, replace the disk-save logic with S3 upload.
- */
-export async function generateInvoicePdf(
-  data: InvoiceData,
-  outputDir = path.join(process.cwd(), 'public', 'invoices'),
-): Promise<{ filePath: string; pdfUrl: string }> {
-  // Lazy-load pdfkit so the module is optional
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const PDFDocument = require('pdfkit');
-
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  const fileName = `invoice-${data.invoiceNumber}.pdf`;
-  const filePath = path.join(outputDir, fileName);
-  const pdfUrl = `/invoices/${fileName}`;
+  const fileName = `invoice-${order.orderNumber}.pdf`;
+  const filePath = path.join(dir, fileName);
 
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const doc = new PDFDocument({ margin: 50 });
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    // ── Header ──────────────────────────────────────────────
-    doc
-      .fontSize(22)
-      .font('Helvetica-Bold')
-      .text('INVOICE', { align: 'right' });
+    // ─── Header ───────────────────────────────────────────────
+    doc.fontSize(24).font('Helvetica-Bold').text('BRAND HIVE', 50, 50);
+    doc.fontSize(20).font('Helvetica-Bold').text('INVOICE', 400, 50, { align: 'right' });
+    doc.fontSize(10).font('Helvetica').fillColor('#666')
+      .text(`#${order.orderNumber}`, 400, 78, { align: 'right' })
+      .text(`Date: ${new Date(order.createdAt ?? Date.now()).toLocaleDateString()}`, 400, 92, { align: 'right' })
+      .fillColor('#000');
 
-    doc
-      .fontSize(10)
-      .font('Helvetica')
-      .text(`Invoice #: ${data.invoiceNumber}`, { align: 'right' })
-      .text(`Order #: ${data.orderNumber}`, { align: 'right' })
-      .text(`Date: ${data.createdAt.toLocaleDateString('en-EG')}`, { align: 'right' });
+    doc.moveTo(50, 115).lineTo(560, 115).stroke('#ddd');
 
-    doc.moveDown(2);
+    // ─── Bill To ──────────────────────────────────────────────
+    doc.fontSize(11).font('Helvetica-Bold').text('BILL TO:', 50, 130);
+    doc.fontSize(10).font('Helvetica')
+      .text(order.shippingAddress?.fullName ?? '', 50, 148)
+      .text(order.shippingAddress?.phone ?? '', 50, 162)
+      .text(`${order.shippingAddress?.street ?? ''}, ${order.shippingAddress?.city ?? ''}`, 50, 176)
+      .text(`${order.shippingAddress?.governorate ?? ''}, ${order.shippingAddress?.country ?? 'Egypt'}`, 50, 190);
 
-    // ── Bill To ─────────────────────────────────────────────
-    doc.fontSize(12).font('Helvetica-Bold').text('Bill To:');
-    doc
-      .fontSize(10)
-      .font('Helvetica')
-      .text(data.customer.name)
-      .text(data.customer.email)
-      .text(data.customer.phone);
+    // ─── Payment ──────────────────────────────────────────────
+    doc.font('Helvetica-Bold').text('PAYMENT:', 350, 130);
+    doc.font('Helvetica')
+      .text(`Method: ${(order.paymentMethod ?? '').toUpperCase()}`, 350, 148)
+      .text(`Status: ${(order.paymentStatus ?? '').toUpperCase()}`, 350, 162);
 
-    doc.moveDown();
+    // ─── Items Table ──────────────────────────────────────────
+    let y = 230;
+    doc.moveTo(50, y - 5).lineTo(560, y - 5).stroke('#ddd');
+    doc.font('Helvetica-Bold').fontSize(10)
+      .text('ITEM', 50, y).text('SKU', 250, y)
+      .text('QTY', 330, y).text('PRICE', 380, y).text('TOTAL', 490, y, { align: 'right' });
+    doc.moveTo(50, y + 18).lineTo(560, y + 18).stroke('#ddd');
+    y += 28;
 
-    // ── Ship To ─────────────────────────────────────────────
-    doc.fontSize(12).font('Helvetica-Bold').text('Ship To:');
-    doc
-      .fontSize(10)
-      .font('Helvetica')
-      .text(data.shippingAddress.fullName)
-      .text(data.shippingAddress.street)
-      .text(`${data.shippingAddress.city}, ${data.shippingAddress.governorate}`)
-      .text(data.shippingAddress.country);
-
-    doc.moveDown(2);
-
-    // ── Items Table ──────────────────────────────────────────
-    const tableTop = doc.y;
-    const colWidths = { item: 220, qty: 60, unit: 90, total: 90 };
-    const startX = 50;
-
-    // Table header
-    doc.font('Helvetica-Bold').fontSize(10);
-    doc.text('Item', startX, tableTop);
-    doc.text('Qty', startX + colWidths.item, tableTop);
-    doc.text('Unit Price', startX + colWidths.item + colWidths.qty, tableTop);
-    doc.text('Total', startX + colWidths.item + colWidths.qty + colWidths.unit, tableTop, {
-      align: 'right',
-      width: colWidths.total,
-    });
-
-    doc
-      .moveTo(startX, tableTop + 15)
-      .lineTo(startX + 460, tableTop + 15)
-      .stroke();
-
-    let rowY = tableTop + 25;
-    doc.font('Helvetica').fontSize(9);
-
-    for (const item of data.items) {
-      doc.text(item.name, startX, rowY, { width: colWidths.item - 10 });
-      doc.text(String(item.quantity), startX + colWidths.item, rowY);
-      doc.text(`EGP ${item.unitPrice.toFixed(2)}`, startX + colWidths.item + colWidths.qty, rowY);
-      doc.text(
-        `EGP ${item.totalPrice.toFixed(2)}`,
-        startX + colWidths.item + colWidths.qty + colWidths.unit,
-        rowY,
-        { align: 'right', width: colWidths.total },
-      );
-      rowY += 20;
+    for (const item of order.items ?? []) {
+      const price = item.unitDiscountPrice ?? item.unitPrice;
+      doc.font('Helvetica').fontSize(9)
+        .text((item.productName ?? '').substring(0, 30), 50, y)
+        .text(item.sku ?? '', 250, y)
+        .text(String(item.quantity), 330, y)
+        .text(`EGP ${price.toFixed(2)}`, 380, y)
+        .text(`EGP ${item.itemTotal.toFixed(2)}`, 490, y, { align: 'right' });
+      y += 22;
+      if (y > 680) { doc.addPage(); y = 50; }
     }
 
-    doc
-      .moveTo(startX, rowY)
-      .lineTo(startX + 460, rowY)
-      .stroke();
-
-    rowY += 15;
-
-    // ── Pricing Summary ──────────────────────────────────────
-    const summaryX = startX + 250;
-
-    const addSummaryRow = (label: string, value: string, bold = false) => {
-      doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10);
-      doc.text(label, summaryX, rowY);
-      doc.text(value, summaryX + 120, rowY, { align: 'right', width: 90 });
-      rowY += 18;
-    };
-
-    addSummaryRow('Subtotal:', `EGP ${data.pricing.subtotal.toFixed(2)}`);
-    addSummaryRow('Shipping:', `EGP ${data.pricing.shippingFee.toFixed(2)}`);
-
-    if (data.pricing.discount > 0) {
-      addSummaryRow(
-        `Discount${data.couponCode ? ` (${data.couponCode})` : ''}:`,
-        `-EGP ${data.pricing.discount.toFixed(2)}`,
-      );
+    // ─── Summary ──────────────────────────────────────────────
+    doc.moveTo(350, y + 5).lineTo(560, y + 5).stroke('#ddd');
+    y += 15;
+    doc.font('Helvetica').fontSize(10)
+      .text('Subtotal:', 370, y).text(`EGP ${(order.subtotal ?? 0).toFixed(2)}`, 560, y, { align: 'right' }); y += 16;
+    doc.text('Shipping:', 370, y).text(`EGP ${(order.shippingFee ?? 0).toFixed(2)}`, 560, y, { align: 'right' }); y += 16;
+    if ((order.discount ?? 0) > 0) {
+      doc.fillColor('#27ae60').text('Discount:', 370, y).text(`-EGP ${order.discount.toFixed(2)}`, 560, y, { align: 'right' }).fillColor('#000'); y += 16;
     }
+    doc.moveTo(350, y).lineTo(560, y).stroke('#333'); y += 8;
+    doc.font('Helvetica-Bold').fontSize(12)
+      .text('TOTAL:', 370, y).text(`EGP ${(order.total ?? 0).toFixed(2)}`, 560, y, { align: 'right' });
 
-    if (data.pricing.tax > 0) {
-      addSummaryRow('Tax:', `EGP ${data.pricing.tax.toFixed(2)}`);
-    }
-
-    doc
-      .moveTo(summaryX, rowY)
-      .lineTo(summaryX + 210, rowY)
-      .stroke();
-    rowY += 5;
-
-    addSummaryRow('TOTAL:', `EGP ${data.pricing.total.toFixed(2)}`, true);
-
-    // ── Payment Info ─────────────────────────────────────────
-    doc.moveDown(2);
-    doc
-      .fontSize(9)
-      .font('Helvetica')
-      .text(
-        `Payment Method: ${data.paymentMethod.toUpperCase()} | Status: ${data.paymentStatus.toUpperCase()}`,
-        { align: 'center' },
-      );
-
-    // ── Footer ───────────────────────────────────────────────
-    doc
-      .fontSize(8)
-      .fillColor('#aaaaaa')
-      .text('Thank you for your order!', { align: 'center' })
-      .text('For support: support@yourstore.com', { align: 'center' });
+    // ─── Footer ───────────────────────────────────────────────
+    doc.fontSize(9).font('Helvetica').fillColor('#999')
+      .text('Thank you for shopping with Brand Hive!', 50, 750, { align: 'center' });
 
     doc.end();
-
-    stream.on('finish', () => resolve({ filePath, pdfUrl }));
+    stream.on('finish', () => resolve(`invoices/${fileName}`));
     stream.on('error', reject);
   });
-}
-
-export function generateInvoiceNumber(orderNumber: string): string {
-  const timestamp = Date.now().toString().slice(-6);
-  return `INV-${orderNumber}-${timestamp}`;
 }

@@ -1,33 +1,45 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Order, OrderSchema } from '../../models/order/order.schema';
-import { OrderRepository } from '../../models/order/order.repository';
-import { OrderService } from './order.service';
-import { OrderController } from './order.controller';
+import { JwtModule } from '@nestjs/jwt';
 
-// استيراد الموديولات الخارجية اللي بتعتمدي عليها
-import { UserMongoModule } from '../../shared/index'; // عشان الـ UserRepository اللي في الـ AuthGuard
-import { CartModule } from '../cart/cart.module';
-import { ProductModule } from '../product/product.module';
+import { OrderController } from './order.controller';
+import { OrderService } from './order.service';
+import { OrderFactoryService } from './factory';
+import { OrderRepository } from '../../models/order/order.repository';
+import { Order, OrderSchema } from '../../models/order/order.schema';
+
+import { ProductRepository } from '../../models/product/product.repository';
+import { Product, ProductSchema } from '../../models/product/product.schema';
+
+import { Cart, CartSchema } from '../../models/cart/cart.schema';
+import { CartRepository } from '../../models/cart/cart.repository';
+import { CartService } from '../cart/cart.service';
+import { CartFactoryService } from '../cart/factory';
+
+import { NotificationModule } from '../notification/notification.module';
+import { UserMongoModule } from '../../shared/modules/user-mongo.module';
 
 @Module({
   imports: [
-    // 1. تعريف موديل الأوردر في قاعدة البيانات
-    MongooseModule.forFeature([{ name: Order.name, schema: OrderSchema }]),
-    
-    // 2. استيراد الموديولات اللي الـ OrderService والـ AuthGuard محتاجينها
-    UserMongoModule, // ضروري جداً عشان الـ Guard
-    CartModule,      // ضروري عشان الـ OrderService بيستخدم الـ Cart
-    ProductModule,   // ضروري عشان الـ OrderService بيعدل في الـ Stock
+    UserMongoModule,
+    JwtModule,
+    NotificationModule,
+    MongooseModule.forFeature([
+      { name: Order.name, schema: OrderSchema },
+      { name: Product.name, schema: ProductSchema },
+      { name: Cart.name, schema: CartSchema },
+    ]),
   ],
   controllers: [OrderController],
   providers: [
-    OrderService, 
-    OrderRepository
+    OrderService,
+    OrderFactoryService,
+    OrderRepository,
+    ProductRepository,
+    CartService,
+    CartFactoryService,
+    CartRepository,
   ],
-  exports: [
-    OrderService, 
-    OrderRepository
-  ],
+  exports: [OrderService],
 })
 export class OrderModule {}
