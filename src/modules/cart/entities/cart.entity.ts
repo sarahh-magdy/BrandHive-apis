@@ -20,13 +20,12 @@ export class CartEntity {
   expiresAt: Date | null;
 }
 
-// ─── Mapped Cart (what frontend + order service receives) ──────────
 export interface MappedCartItem {
   product: {
     id: string;
     name: string;
     slug: string;
-    sku: string;         // ─── FIXED: أضفنا sku عشان الـ order يلاقيه ──
+    sku: string;         
     image: string | null;
     isAvailable: boolean;
   };

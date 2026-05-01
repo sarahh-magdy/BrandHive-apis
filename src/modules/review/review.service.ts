@@ -1,346 +1,160 @@
-// import {
-//   BadRequestException,
-//   ForbiddenException,
-//   Injectable,
-//   NotFoundException,
-// } from '@nestjs/common';
-// import { ReviewRepository } from '../../models/review/review.repository';
-// import { ReviewDocument } from '../../models/review/review.schema';
-// import {
-//   CreateReviewDto,
-//   AdminReplyDto,
-//   UpdateReviewDto,
-// } from './dto/create-review.dto';
-// import { GetReviewsDto, ReviewSortBy } from './dto/get-reviews.dto';
-// import { buildReview } from './factory';
-// import { OrderService } from '../order/order.service';
-// import { ProductService } from '../product/product.service';
-// /**
-//  * Replace with actual imports
-//  */
-// interface IOrderService {
-//   hasDeliveredOrderWithProduct(
-//     userId: string,
-//     productId: string,
-//   ): Promise<{ exists: boolean; orderId?: string }>;
-// }
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Types } from 'mongoose';
+import { ReviewRepository } from '../../models/review/review.repository';
+import { ProductRepository } from '../../models/product/product.repository';
+import { OrderRepository } from '../../models/order/order.repository';
+import { ReviewFactoryService } from './factory';
+import { CreateReviewDto, GetReviewsDto } from './dto/review.dto';
+import { OrderStatus } from '../../models/order/order.schema';
 
-// interface IProductService {
-//   findById(productId: string): Promise<any>;
-//   updateRating(
-//     productId: string,
-//     avgRating: number,
-//     reviewCount: number,
-//   ): Promise<void>;
-// }
+@Injectable()
+export class ReviewService {
+  constructor(
+    private readonly reviewRepository: ReviewRepository,
+    private readonly productRepository: ProductRepository,
+    private readonly orderRepository: OrderRepository,
+    private readonly reviewFactory: ReviewFactoryService,
+  ) {}
 
-// @Injectable()
-// export class ReviewService {
-//   constructor(
-//   private readonly reviewRepository: ReviewRepository,
-//   private readonly orderService: OrderService,
-//   private readonly productService: ProductService,
-//   ) {}
+  // ════════════════════════════════════════════════════════════════
+  // CREATE REVIEW — Verified Purchase Only
+  // ════════════════════════════════════════════════════════════════
+  async createReview(userId: string, dto: CreateReviewDto) {
+    // ─── Product must exist ───────────────────────────────────
+    const product = await this.productRepository.getOne({
+      _id: new Types.ObjectId(dto.productId),
+      isDeleted: false,
+    });
+    if (!product) throw new NotFoundException('Product not found');
 
-//   // ─────────────────────────────────────────
-//   // CREATE REVIEW
-//   // ─────────────────────────────────────────
-//   async createReview(
-//     userId: string,
-//     dto: CreateReviewDto,
-//   ): Promise<ReviewDocument> {
-//     const product = await this.productService.findById(dto.productId);
-//     if (!product) throw new NotFoundException('Product not found');
+    // ─── Verified Purchase: order must be delivered & contain product
+    const order = await this.orderRepository.getOne({
+      _id: new Types.ObjectId(dto.orderId),
+      user: new Types.ObjectId(userId),
+      status: OrderStatus.DELIVERED,
+      'items.product': new Types.ObjectId(dto.productId),
+    });
+    if (!order) {
+      throw new ForbiddenException(
+        'You can only review products from your delivered orders',
+      );
+    }
 
-//     const { exists, orderId } =
-//       await this.orderService.hasDeliveredOrderWithProduct(
-//         userId,
-//         dto.productId,
-//       );
+    // ─── Prevent duplicate review ─────────────────────────────
+    const existing = await this.reviewRepository.getOne({
+      user: new Types.ObjectId(userId),
+      product: new Types.ObjectId(dto.productId),
+      order: new Types.ObjectId(dto.orderId),
+    });
+    if (existing) throw new ConflictException('You already reviewed this product');
 
-//     if (!exists) {
-//       throw new BadRequestException(
-//         'You can only review products you have purchased and received.',
-//       );
-//     }
+    // ─── Build & save ─────────────────────────────────────────
+    const entity = this.reviewFactory.build(dto, userId);
+    const review = await this.reviewRepository.create({ ...entity });
 
-//     const existing = await this.reviewRepository.findByProductAndUser(
-//       dto.productId,
-//       userId,
-//     );
+    // ─── Recalculate product stats ────────────────────────────
+    await this.recalculateStats(dto.productId);
 
-//     if (existing) {
-//       throw new BadRequestException(
-//         'You have already reviewed this product.',
-//       );
-//     }
+    return { message: 'Review submitted successfully', data: review };
+  }
 
-// const reviewData = buildReview({
-//   productId: dto.productId,
-//   userId,
-//   rating: dto.rating,
-//   comment: dto.comment,
-//   title: dto.title,
-//   images: dto.images?.map(img => ({
-//     url: img.url,
-//     alt: img.alt ?? '',
-//   })),
-// });
+  // ════════════════════════════════════════════════════════════════
+  // GET PRODUCT REVIEWS
+  // ════════════════════════════════════════════════════════════════
+  async getProductReviews(productId: string, query: GetReviewsDto) {
+    const { page = 1, limit = 10, rating } = query;
+    const skip = (page - 1) * limit;
 
-//     const review = await this.reviewRepository.create(reviewData);
+    const filter: Record<string, any> = {
+      product: new Types.ObjectId(productId),
+      isVisible: true,
+    };
+    if (rating) filter.rating = rating;
 
-//     await this.syncProductRating(dto.productId);
+    const [data, total, stats] = await Promise.all([
+      this.reviewRepository.findWithPaginationPopulated(filter, { skip, limit }),
+      this.reviewRepository.countDocuments(filter),
+      this.reviewRepository.getProductRatingStats(productId),
+    ]);
 
-//     return review;
-//   }
+    return {
+      data,
+      stats: {
+        averageRating: Math.round((stats.averageRating ?? 0) * 10) / 10,
+        totalReviews: stats.totalReviews ?? 0,
+      },
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
+  }
 
-//   // ─────────────────────────────────────────
-//   // GET PRODUCT REVIEWS
-//   // ─────────────────────────────────────────
-//   async getProductReviews(productId: string, dto: GetReviewsDto) {
-//     const filters: Record<string, any> = {};
+  // ════════════════════════════════════════════════════════════════
+  // GET MY REVIEWS
+  // ════════════════════════════════════════════════════════════════
+  async getMyReviews(userId: string, query: GetReviewsDto) {
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
 
-//     if (dto.rating) filters.rating = dto.rating;
-//     if (dto.verifiedOnly) filters.isVerifiedPurchase = true;
+    const filter = { user: new Types.ObjectId(userId) };
+    const [data, total] = await Promise.all([
+      this.reviewRepository.findWithPaginationPopulated(filter, { skip, limit }),
+      this.reviewRepository.countDocuments(filter),
+    ]);
 
-//     const sort = this.buildSort(dto.sortBy ?? ReviewSortBy.NEWEST);
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
 
-//     const [{ data, total }, stats] = await Promise.all([
-//       this.reviewRepository.findByProduct(productId, filters, {
-//         page: dto.page!,
-//         limit: dto.limit!,
-//         sort,
-//       }),
-//       this.reviewRepository.getRatingStats(productId),
-//     ]);
+  // ════════════════════════════════════════════════════════════════
+  // DELETE REVIEW (owner or Admin)
+  // ════════════════════════════════════════════════════════════════
+  async deleteReview(reviewId: string, userId: string, role: string) {
+    const filter: Record<string, any> = { _id: new Types.ObjectId(reviewId) };
+    if (role !== 'Admin') filter.user = new Types.ObjectId(userId);
 
-//     return {
-//       data,
-//       total,
-//       page: dto.page,
-//       limit: dto.limit,
-//       totalPages: Math.ceil(total / dto.limit!),
-//       stats,
-//     };
-//   }
+    const review = await this.reviewRepository.getOne(filter);
+    if (!review) throw new NotFoundException('Review not found');
 
-//   // ─────────────────────────────────────────
-//   // GET REVIEW BY ID
-//   // ─────────────────────────────────────────
-//   async getReviewById(id: string): Promise<ReviewDocument> {
-//     const review = await this.reviewRepository.findById(id);
-//     if (!review) throw new NotFoundException('Review not found');
-//     return review;
-//   }
+    const productId = (review as any).product.toString();
+    await this.reviewRepository.delete({ _id: new Types.ObjectId(reviewId) });
+    await this.recalculateStats(productId);
 
-//   // ─────────────────────────────────────────
-//   // GET MY REVIEWS
-//   // ─────────────────────────────────────────
-//   async getMyReviews(userId: string, dto: GetReviewsDto) {
-//     const { data, total } =
-//       await this.reviewRepository.findByUser(userId, {
-//         page: dto.page!,
-//         limit: dto.limit!,
-//       });
+    return { message: 'Review deleted successfully' };
+  }
 
-//     return {
-//       data,
-//       total,
-//       page: dto.page,
-//       limit: dto.limit,
-//       totalPages: Math.ceil(total / dto.limit!),
-//     };
-//   }
+  // ════════════════════════════════════════════════════════════════
+  // TOGGLE VISIBILITY (Admin)
+  // ════════════════════════════════════════════════════════════════
+  async toggleVisibility(reviewId: string) {
+    const review = await this.reviewRepository.getOne({
+      _id: new Types.ObjectId(reviewId),
+    });
+    if (!review) throw new NotFoundException('Review not found');
 
-//   // ─────────────────────────────────────────
-//   // UPDATE REVIEW
-//   // ─────────────────────────────────────────
-//   async updateReview(
-//     reviewId: string,
-//     userId: string,
-//     dto: UpdateReviewDto,
-//   ): Promise<ReviewDocument> {
-//     const review = await this.reviewRepository.findById(reviewId);
-//     if (!review) throw new NotFoundException('Review not found');
+    const updated = await this.reviewRepository.updateOne(
+      { _id: new Types.ObjectId(reviewId) },
+      { isVisible: !(review as any).isVisible },
+      { new: true },
+    );
 
-//     if (String(review.userId) !== userId)
-//       throw new ForbiddenException('Access denied');
+    await this.recalculateStats((review as any).product.toString());
 
-//     const updated = await this.reviewRepository.update(reviewId, {
-//       ...(dto.rating !== undefined && { rating: dto.rating }),
-//       ...(dto.comment && { comment: dto.comment }),
-//       ...(dto.title && { title: dto.title }),
-// ...(dto.images && {
-//   images: dto.images.map(img => ({
-//     url: img.url,
-//     alt: img.alt ?? '',
-//   })),
-// }),    });
+    return { message: 'Review visibility updated', data: updated };
+  }
 
-//     if (dto.rating !== undefined) {
-//       await this.syncProductRating(String(review.productId));
-//     }
-
-//     return updated!;
-//   }
-
-//   // ─────────────────────────────────────────
-//   // DELETE REVIEW
-//   // ─────────────────────────────────────────
-//   async deleteReview(
-//     reviewId: string,
-//     userId: string,
-//     isAdmin = false,
-//   ): Promise<void> {
-//     const review = await this.reviewRepository.findById(reviewId);
-//     if (!review) throw new NotFoundException('Review not found');
-
-//     if (!isAdmin && String(review.userId) !== userId)
-//       throw new ForbiddenException('Access denied');
-
-//     await this.reviewRepository.softDelete(reviewId);
-//     await this.syncProductRating(String(review.productId));
-//   }
-
-//   // ─────────────────────────────────────────
-//   // HELPFUL VOTE
-//   // ─────────────────────────────────────────
-//   async toggleHelpfulVote(
-//     reviewId: string,
-//     userId: string,
-//   ): Promise<{ helpful: boolean; count: number }> {
-//     const review = await this.reviewRepository.findById(reviewId);
-//     if (!review) throw new NotFoundException('Review not found');
-
-//     if (String(review.userId) === userId) {
-//       throw new BadRequestException(
-//         'Cannot vote on your own review',
-//       );
-//     }
-
-//     const hasVoted = review.helpfulVoters?.some(
-//       (id) => String(id) === userId,
-//     );
-
-//     let updated: ReviewDocument | null;
-
-//     if (hasVoted) {
-//       updated =
-//         await this.reviewRepository.removeHelpfulVote(
-//           reviewId,
-//           userId,
-//         );
-//     } else {
-//       updated =
-//         await this.reviewRepository.addHelpfulVote(
-//           reviewId,
-//           userId,
-//         );
-//     }
-
-//     return {
-//       helpful: !hasVoted,
-//       count: updated?.helpfulCount ?? 0,
-//     };
-//   }
-
-//   // ─────────────────────────────────────────
-//   // STATS
-//   // ─────────────────────────────────────────
-//   async getProductRatingStats(productId: string) {
-//     return this.reviewRepository.getRatingStats(productId);
-//   }
-
-//   // ─────────────────────────────────────────
-//   // ADMIN
-//   // ─────────────────────────────────────────
-//   async toggleVisibility(
-//     reviewId: string,
-//   ): Promise<ReviewDocument> {
-//     const review = await this.reviewRepository.findById(reviewId);
-//     if (!review) throw new NotFoundException('Review not found');
-
-//     return (
-//       await this.reviewRepository.update(reviewId, {
-//         isVisible: !review.isVisible,
-//       })
-//     )!;
-//   }
-
-//   async adminReply(
-//     reviewId: string,
-//     dto: AdminReplyDto,
-//   ): Promise<ReviewDocument> {
-//     const review = await this.reviewRepository.findById(reviewId);
-//     if (!review) throw new NotFoundException('Review not found');
-
-//     return (
-//       await this.reviewRepository.update(reviewId, {
-//         adminReply: dto.reply,
-//         adminRepliedAt: new Date(),
-//       })
-//     )!;
-//   }
-
-//   async adminGetAllReviews(
-//     dto: GetReviewsDto & {
-//       productId?: string;
-//       userId?: string;
-//     },
-//   ) {
-//     const filters: Record<string, any> = {};
-
-//     if (dto.productId) filters.productId = dto.productId;
-//     if (dto.userId) filters.userId = dto.userId;
-//     if (dto.rating) filters.rating = dto.rating;
-//     if (dto.verifiedOnly)
-//       filters.isVerifiedPurchase = true;
-
-//     const { data, total } =
-//       await this.reviewRepository.findAll(filters, {
-//         page: dto.page!,
-//         limit: dto.limit!,
-//       });
-
-//     return {
-//       data,
-//       total,
-//       page: dto.page,
-//       limit: dto.limit,
-//       totalPages: Math.ceil(total / dto.limit!),
-//     };
-//   }
-
-//   // ─────────────────────────────────────────
-//   // HELPERS
-//   // ─────────────────────────────────────────
-//   private async syncProductRating(productId: string) {
-//     const stats =
-//       await this.reviewRepository.getRatingStats(productId);
-
-//     await this.productService.updateRating(
-//       productId,
-//       stats.averageRating,
-//       stats.totalReviews,
-//     );
-//   }
-
-//   private buildSort(
-//     sortBy: ReviewSortBy,
-//   ): Record<string, 1 | -1> {
-//     switch (sortBy) {
-//       case ReviewSortBy.NEWEST:
-//         return { createdAt: -1 };
-//       case ReviewSortBy.OLDEST:
-//         return { createdAt: 1 };
-//       case ReviewSortBy.HIGHEST_RATING:
-//         return { rating: -1 };
-//       case ReviewSortBy.LOWEST_RATING:
-//         return { rating: 1 };
-//       case ReviewSortBy.MOST_HELPFUL:
-//         return { helpfulCount: -1 };
-//       default:
-//         return { createdAt: -1 };
-//     }
-//   }
-// }
+  // ─── Recalculate Product Rating Stats ─────────────────────────
+  private async recalculateStats(productId: string) {
+    const stats = await this.reviewRepository.getProductRatingStats(productId);
+    await this.productRepository.updateOne(
+      { _id: new Types.ObjectId(productId) },
+      {
+        'stats.averageRating': Math.round((stats.averageRating ?? 0) * 10) / 10,
+        'stats.totalReviews': stats.totalReviews ?? 0,
+      },
+      { new: true },
+    );
+  }
+}

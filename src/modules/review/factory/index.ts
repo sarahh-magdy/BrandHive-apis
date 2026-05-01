@@ -1,34 +1,19 @@
-// import { Types } from 'mongoose';
+import { Injectable } from '@nestjs/common';
+import { Types } from 'mongoose';
+import { ReviewEntity } from '../entities/review.entity';
+import { CreateReviewDto } from '../dto/review.dto';
 
-// interface BuildReviewParams {
-//   productId: string;
-//   userId: string;
-//   rating: number;
-//   comment: string;
-//   title?: string;
-//   images?: { url: string; alt?: string }[];
-//   orderId?: string | null;
-//   isVerifiedPurchase?: boolean;
-// }
-
-// export function buildReview(params: BuildReviewParams) {
-//   return {
-//     productId: new Types.ObjectId(params.productId),
-//     userId: new Types.ObjectId(params.userId),
-//     orderId: params.orderId ? new Types.ObjectId(params.orderId) : null,
-//     isVerifiedPurchase: params.isVerifiedPurchase ?? false,
-//     rating: params.rating,
-//     comment: params.comment,
-//     title: params.title,
-
-//     images: (params.images ?? []).map(img => ({
-//       url: img.url,
-//       alt: img.alt ?? '',
-//     })),
-
-//     helpfulCount: 0,
-//     helpfulVoters: [],
-//     isVisible: true,
-//     isDeleted: false,
-//   };
-// }
+@Injectable()
+export class ReviewFactoryService {
+  build(dto: CreateReviewDto, userId: string): ReviewEntity {
+    const review = new ReviewEntity();
+    (review as any)._id = new Types.ObjectId();
+    review.user = new Types.ObjectId(userId);
+    review.product = new Types.ObjectId(dto.productId);
+    review.order = new Types.ObjectId(dto.orderId);
+    review.rating = dto.rating;
+    review.comment = dto.comment;
+    review.isVisible = true;
+    return review;
+  }
+}

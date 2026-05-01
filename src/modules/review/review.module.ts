@@ -1,30 +1,39 @@
-// import { Module } from '@nestjs/common';
-// import { MongooseModule } from '@nestjs/mongoose';
+import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { JwtModule } from '@nestjs/jwt';
 
-// import { ReviewController } from './review.controller';
-// import { ReviewService } from './review.service';
-// import { ReviewRepository } from '../../models/review/review.repository';
+import { ReviewController } from './review.controller';
+import { ReviewService } from './review.service';
+import { ReviewFactoryService } from './factory';
+import { ReviewRepository } from '../../models/review/review.repository';
+import { Review, ReviewSchema } from '../../models/review/review.schema';
 
-// import { OrderModule } from '../order/order.module';
-// import { ProductModule } from '../product/product.module';
+import { ProductRepository } from '../../models/product/product.repository';
+import { Product, ProductSchema } from '../../models/product/product.schema';
 
-// import { Review, ReviewSchema } from '../../models/review/review.schema';
+import { OrderRepository } from '../../models/order/order.repository';
+import { Order, OrderSchema } from '../../models/order/order.schema';
 
-// @Module({
-//   imports: [
-//     OrderModule,
-//     ProductModule,
+import { UserMongoModule } from '../../shared/modules/user-mongo.module';
 
-//     // 🔥 ده أهم سطر
-//     MongooseModule.forFeature([
-//       { name: Review.name, schema: ReviewSchema },
-//     ]),
-//   ],
-//   controllers: [ReviewController],
-//   providers: [
-//     ReviewService,
-//     ReviewRepository,
-//   ],
-//   exports: [ReviewService],
-// })
-// export class ReviewModule {}
+@Module({
+  imports: [
+    UserMongoModule,
+    JwtModule,
+    MongooseModule.forFeature([
+      { name: Review.name, schema: ReviewSchema },
+      { name: Product.name, schema: ProductSchema },
+      { name: Order.name, schema: OrderSchema },
+    ]),
+  ],
+  controllers: [ReviewController],
+  providers: [
+    ReviewService,
+    ReviewFactoryService,
+    ReviewRepository,
+    ProductRepository,
+    OrderRepository,
+  ],
+  exports: [ReviewService],
+})
+export class ReviewModule {}
