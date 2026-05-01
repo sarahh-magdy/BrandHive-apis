@@ -20,12 +20,13 @@ export class CartEntity {
   expiresAt: Date | null;
 }
 
-// ─── Mapped Cart (what frontend receives) ─────────────────────────
+// ─── Mapped Cart (what frontend + order service receives) ──────────
 export interface MappedCartItem {
   product: {
     id: string;
     name: string;
     slug: string;
+    sku: string;         // ─── FIXED: أضفنا sku عشان الـ order يلاقيه ──
     image: string | null;
     isAvailable: boolean;
   };
@@ -33,10 +34,10 @@ export interface MappedCartItem {
   lockedPrice: number;
   lockedDiscountPrice: number | null;
   currentPrice: number;
-  effectivePrice: number;        
-  itemTotal: number;             // effectivePrice * quantity
-  priceChanged: boolean;       
-  priceDifference: number | null; 
+  effectivePrice: number;
+  itemTotal: number;
+  priceChanged: boolean;
+  priceDifference: number | null;
 }
 
 export interface MappedCart {
