@@ -398,7 +398,7 @@ async verifyResetCode(dto: VerifyResetCodeDto) {
           { sub: userId, role },
           {
             secret: process.env.JWT_SECRET,
-            expiresIn: '15m',
+            expiresIn: '1d',
           },
         ),
         this.jwtService.signAsync(
