@@ -18,6 +18,8 @@ import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrderModule } from './modules/order/order.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { AddressModule } from '@modules/address/address.module';
+import { CouponModule } from '@modules/coupon/coupon.module';
 @Module({
   imports: [
     ConfigModule.forRoot({  
@@ -40,7 +42,8 @@ import { NotificationModule } from './modules/notification/notification.module';
     CartModule,
     OrderModule,
     NotificationModule,
-    
+    AddressModule,
+    CouponModule
 
   ],
   controllers: [AppController],

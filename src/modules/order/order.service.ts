@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -10,21 +9,32 @@ import { OrderRepository } from '../../models/order/order.repository';
 import { ProductRepository } from '../../models/product/product.repository';
 import { CartService } from '../cart/cart.service';
 import { NotificationService } from '../notification/notification.service';
+import { AddressService } from '../address/address.service';
+import { CouponService } from '../coupon/coupon.service';
 import { OrderFactoryService } from './factory';
 import { sendMail } from '../../common/helpers/send-mail.helper';
 import { generateInvoicePDF } from '../../common/helpers/invoice.helper';
 import {
-  initPaymobPayment, initFawryPayment,
-  verifyPayment, PaymentGateway,
+  initPaymobPayment,
+  initFawryPayment,
+  verifyPayment,
+  PaymentGateway,
 } from '../../common/helpers/payment.helper';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto, CancelOrderDto } from './dto/update-order-status.dto';
 import { GetOrdersDto } from './dto/get-orders.dto';
-import { OrderStatus, PaymentMethod, PaymentStatus } from '../../models/order/order.schema';
-import { PaymentInitResult, PaymentVerifyResult } from '../../common/helpers/payment.helper';
-import { NotificationType } from '../../models/notification/notification.schema';
+import {
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+} from '../../models/order/order.schema';
+import { NotificationType } from '@models/notification/notification.schema';
 
-const NON_CANCELABLE = [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELED];
+const NON_CANCELABLE = [
+  OrderStatus.SHIPPED,
+  OrderStatus.DELIVERED,
+  OrderStatus.CANCELED,
+];
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]:   [OrderStatus.CONFIRMED, OrderStatus.CANCELED],
@@ -41,6 +51,8 @@ export class OrderService {
     private readonly productRepository: ProductRepository,
     private readonly cartService: CartService,
     private readonly notificationService: NotificationService,
+    private readonly addressService: AddressService,
+    private readonly couponService: CouponService,
     private readonly orderFactoryService: OrderFactoryService,
     private readonly configService: ConfigService,
   ) {}
@@ -49,8 +61,52 @@ export class OrderService {
   // CREATE ORDER
   // ════════════════════════════════════════════════════════════════
   async createOrder(userId: string, dto: CreateOrderDto) {
-    // ─── Get cart with final stock validation ─────────────────
+    // ─── Resolve shipping address ─────────────────────────────
+    let resolvedAddress: any;
+
+    if (dto.addressId) {
+      // Use saved address from DB
+      resolvedAddress = await this.addressService.getAddressById(
+        dto.addressId,
+        userId,
+      );
+    } else if (dto.shippingAddress) {
+      // Use inline address from request
+      resolvedAddress = dto.shippingAddress;
+    } else {
+      throw new BadRequestException(
+        'Please provide either addressId or shippingAddress',
+      );
+    }
+
+    // ─── Get cart with final validation ──────────────────────
     const cartSummary = await this.cartService.getCartForOrder(userId);
+
+    // ─── Resolve coupon from DB (replaces hardcoded coupons) ─
+    let couponData: {
+      couponId: string;
+      couponCode: string;
+      couponDiscount: number;
+    } | null = null;
+
+    if (dto.couponCode) {
+      try {
+        couponData = await this.couponService.applyCouponOnCart(
+          dto.couponCode,
+          userId,
+          cartSummary.subtotal,
+        );
+      } catch (e) {
+        throw new BadRequestException(e.message);
+      }
+    }
+
+    // ─── Build enriched cart with coupon data ─────────────────
+    const enrichedCart = {
+      ...cartSummary,
+      couponSaving: couponData?.couponDiscount ?? cartSummary.couponSaving ?? 0,
+      couponCode: couponData?.couponCode ?? cartSummary.couponCode ?? null,
+    };
 
     // ─── Validate stock & reduce ──────────────────────────────
     for (const item of cartSummary.items) {
@@ -59,14 +115,18 @@ export class OrderService {
         isDeleted: false,
         isActive: true,
       });
+
       if (!product) {
-        throw new BadRequestException(`"${item.product.name}" is no longer available`);
+        throw new BadRequestException(
+          `"${item.product.name}" is no longer available`,
+        );
       }
       if ((product as any).stock < item.quantity) {
         throw new BadRequestException(
           `Only ${(product as any).stock} units left for "${item.product.name}"`,
         );
       }
+
       await this.productRepository.updateOne(
         { _id: (product as any)._id },
         { $inc: { stock: -item.quantity } },
@@ -75,8 +135,17 @@ export class OrderService {
     }
 
     // ─── Build & save order ───────────────────────────────────
-    const orderEntity = this.orderFactoryService.buildOrder(dto, userId, cartSummary);
+    const orderEntity = this.orderFactoryService.buildOrder(
+      { ...dto, shippingAddress: resolvedAddress },
+      userId,
+      enrichedCart,
+    );
     const created = await this.orderRepository.create({ ...orderEntity });
+
+    // ─── Increment coupon usage ───────────────────────────────
+    if (couponData?.couponId) {
+      await this.couponService.incrementUsage(couponData.couponId, userId);
+    }
 
     // ─── Clear cart ───────────────────────────────────────────
     await this.cartService.clearCart(userId);
@@ -87,7 +156,7 @@ export class OrderService {
     if (dto.paymentMethod === PaymentMethod.PAYMOB) {
       const result = await initPaymobPayment(created);
       if (result.success) {
-        paymentUrl = result.paymentUrl ?? null;
+        paymentUrl = result?.paymentUrl ?? null;
         await this.orderRepository.updateOne(
           { _id: (created as any)._id },
           { paymentTransactionId: result.transactionId },
@@ -97,7 +166,7 @@ export class OrderService {
     } else if (dto.paymentMethod === PaymentMethod.FAWRY) {
       const result = await initFawryPayment(created);
       if (result.success) {
-       paymentUrl = result.paymentUrl ?? null;
+        paymentUrl = result?.paymentUrl ?? null;
         await this.orderRepository.updateOne(
           { _id: (created as any)._id },
           { paymentTransactionId: result.transactionId },
@@ -114,8 +183,10 @@ export class OrderService {
       );
     }
 
-    // ─── Invoice (async — don't block response) ───────────────
-    const populated = await this.orderRepository.findOnePopulated({ _id: (created as any)._id });
+    // ─── Invoice (async) ──────────────────────────────────────
+    const populated = await this.orderRepository.findOnePopulated({
+      _id: (created as any)._id,
+    });
     this.buildAndSendInvoice(populated, userId).catch(console.error);
 
     // ─── Notification ─────────────────────────────────────────
@@ -127,7 +198,10 @@ export class OrderService {
       data: { orderId: (created as any)._id.toString() },
     });
 
-    const response: any = { message: 'Order created successfully', data: created };
+    const response: any = {
+      message: 'Order created successfully',
+      data: created,
+    };
     if (paymentUrl) response.paymentUrl = paymentUrl;
     return response;
   }
@@ -152,7 +226,11 @@ export class OrderService {
       this.orderRepository.findWithPaginationPopulated(filter, { skip, limit }),
       this.orderRepository.countDocuments(filter),
     ]);
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -170,7 +248,12 @@ export class OrderService {
   // ════════════════════════════════════════════════════════════════
   // CANCEL ORDER
   // ════════════════════════════════════════════════════════════════
-  async cancelOrder(orderId: string, userId: string, role: string, dto: CancelOrderDto) {
+  async cancelOrder(
+    orderId: string,
+    userId: string,
+    role: string,
+    dto: CancelOrderDto,
+  ) {
     const filter: Record<string, any> = { _id: new Types.ObjectId(orderId) };
     if (role !== 'Admin') filter.user = new Types.ObjectId(userId);
 
@@ -192,6 +275,27 @@ export class OrderService {
       );
     }
 
+    // ─── Decrement coupon usage if coupon was used ─────────────
+    // NOTE: نحتاج نحفظ الـ couponId في الـ order schema لو عايزين ده
+    // دلوقتي بنعمل lookup بالـ couponCode
+    if ((order as any).couponCode) {
+      try {
+        const coupon = await this.couponService.validateAndGetCoupon(
+          (order as any).couponCode,
+          userId,
+          0, // skip amount validation on cancel
+        );
+        if (coupon) {
+          await this.couponService.decrementUsage(
+            (coupon as any)._id.toString(),
+            userId,
+          );
+        }
+      } catch {
+        // ignore if coupon no longer exists
+      }
+    }
+
     await this.orderRepository.updateOne(
       { _id: new Types.ObjectId(orderId) },
       {
@@ -211,20 +315,25 @@ export class OrderService {
       { new: true },
     );
 
-await this.notificationService.create({
-  user: (order as any).user.toString(),
-  type: NotificationType.ORDER_CANCELED,
-  title: 'Order Canceled',
-  body: `Order #${(order as any).orderNumber} has been canceled.`,
-  data: { orderId },
-});
+    await this.notificationService.create({
+      user: (order as any).user.toString(),
+      type: NotificationType.ORDER_CANCELED,
+      title: 'Order Canceled',
+      body: `Order #${(order as any).orderNumber} has been canceled.`,
+      data: { orderId },
+    });
+
     return { message: 'Order canceled successfully' };
   }
 
   // ════════════════════════════════════════════════════════════════
   // UPDATE ORDER STATUS (Admin)
   // ════════════════════════════════════════════════════════════════
-  async updateOrderStatus(orderId: string, dto: UpdateOrderStatusDto, adminId: string) {
+  async updateOrderStatus(
+    orderId: string,
+    dto: UpdateOrderStatusDto,
+    adminId: string,
+  ) {
     return this.changeStatus(orderId, dto, adminId, false);
   }
 
@@ -234,7 +343,9 @@ await this.notificationService.create({
     adminId: string | null,
     skipValidation: boolean,
   ) {
-    const order = await this.orderRepository.getOne({ _id: new Types.ObjectId(orderId) });
+    const order = await this.orderRepository.getOne({
+      _id: new Types.ObjectId(orderId),
+    });
     if (!order) throw new NotFoundException('Order not found');
 
     const current = (order as any).status as OrderStatus;
@@ -274,31 +385,31 @@ await this.notificationService.create({
       { new: true },
     );
 
-const notifMap: Partial<
-  Record<OrderStatus, { type: NotificationType; title: string; body: string }>
-> = {
-  [OrderStatus.CONFIRMED]: {
-    type: NotificationType.ORDER_CONFIRMED,
-    title: 'Order Confirmed ✅',
-    body: `Order #${(order as any).orderNumber} confirmed.`,
-  },
-  [OrderStatus.SHIPPED]: {
-    type: NotificationType.ORDER_SHIPPED,
-    title: 'Order Shipped 🚚',
-    body: `Order #${(order as any).orderNumber} is on the way!`,
-  },
-  [OrderStatus.DELIVERED]: {
-    type: NotificationType.ORDER_DELIVERED,
-    title: 'Order Delivered 🎉',
-    body: `Order #${(order as any).orderNumber} delivered.`,
-  },
-};
+    const notifMap: Record<string, { type: string; title: string; body: string }> = {
+      [OrderStatus.CONFIRMED]: {
+        type: 'order_confirmed',
+        title: 'Order Confirmed ✅',
+        body: `Order #${(order as any).orderNumber} confirmed.`,
+      },
+      [OrderStatus.SHIPPED]: {
+        type: 'order_shipped',
+        title: 'Order Shipped 🚚',
+        body: `Order #${(order as any).orderNumber} is on the way!`,
+      },
+      [OrderStatus.DELIVERED]: {
+        type: 'order_delivered',
+        title: 'Order Delivered 🎉',
+        body: `Order #${(order as any).orderNumber} delivered.`,
+      },
+    };
 
     const notif = notifMap[dto.status];
     if (notif) {
       await this.notificationService.create({
         user: (order as any).user.toString(),
-        ...notif,
+        type: NotificationType.ORDER_PLACED,
+        title: 'Order placed',
+        body: 'Your order has been placed successfully',
         data: { orderId },
       });
     }
@@ -336,7 +447,7 @@ const notifMap: Partial<
   }
 
   // ════════════════════════════════════════════════════════════════
-  // GET INVOICE (on-demand)
+  // GET INVOICE
   // ════════════════════════════════════════════════════════════════
   async getInvoice(orderId: string, userId: string, role: string) {
     const filter: Record<string, any> = { _id: new Types.ObjectId(orderId) };
@@ -346,13 +457,17 @@ const notifMap: Partial<
     if (!order) throw new NotFoundException('Order not found');
 
     if (!(order as any).invoiceUrl) {
-      const path = await generateInvoicePDF(order);
+      const filePath = await generateInvoicePDF(order);
       await this.orderRepository.updateOne(
         { _id: new Types.ObjectId(orderId) },
-        { invoiceUrl: path },
+        { invoiceUrl: filePath },
         { new: true },
       );
-      return { data: { invoiceUrl: `${this.configService.get('APP_URL')}/uploads/${path}` } };
+      return {
+        data: {
+          invoiceUrl: `${this.configService.get('APP_URL')}/uploads/${filePath}`,
+        },
+      };
     }
 
     return {
@@ -369,7 +484,9 @@ const notifMap: Partial<
     const result = await verifyPayment(gateway as PaymentGateway, transactionId);
     if (!result.paid) return { message: 'Payment not confirmed' };
 
-    const order = await this.orderRepository.getOne({ paymentTransactionId: transactionId });
+    const order = await this.orderRepository.getOne({
+      paymentTransactionId: transactionId,
+    });
     if (!order) return { message: 'Order not found' };
 
     await this.orderRepository.updateOne(
@@ -392,7 +509,9 @@ const notifMap: Partial<
   // ORDER COUNT
   // ════════════════════════════════════════════════════════════════
   async getOrderCount(userId: string) {
-    const count = await this.orderRepository.countDocuments({ user: new Types.ObjectId(userId) });
+    const count = await this.orderRepository.countDocuments({
+      user: new Types.ObjectId(userId),
+    });
     return { data: { count } };
   }
 
@@ -418,11 +537,14 @@ const notifMap: Partial<
       this.orderRepository.countDocuments(filter),
     ]);
 
-    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   // ─── Private: Build & Email Invoice ───────────────────────────
-  private async buildAndSendInvoice(order: any, userId: string) {
+  private async buildAndSendInvoice(order: any, _userId: string) {
     try {
       const invoicePath = await generateInvoicePDF(order);
       await this.orderRepository.updateOne(
@@ -434,7 +556,7 @@ const notifMap: Partial<
       const email = order?.user?.email;
       if (email) {
         const url = `${this.configService.get('APP_URL')}/uploads/${invoicePath}`;
-        await sendMail({
+        sendMail({
           to: email,
           subject: `Invoice for Order #${order.orderNumber} - Brand Hive`,
           html: `

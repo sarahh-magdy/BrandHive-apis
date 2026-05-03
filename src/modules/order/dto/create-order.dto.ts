@@ -1,7 +1,11 @@
-// ─── create-order.dto.ts ──────────────────────────────────────────
 import { Type } from 'class-transformer';
 import {
-  IsEnum, IsNotEmpty, IsOptional, IsString, ValidateNested,
+  IsEnum,
+  IsMongoId,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
 } from 'class-validator';
 import { PaymentMethod } from '../../../models/order/order.schema';
 
@@ -16,13 +20,27 @@ export class ShippingAddressDto {
 }
 
 export class CreateOrderDto {
+  // ─── Option A: Use saved address ──────────────────────────────
+  @IsOptional()
+  @IsMongoId()
+  addressId?: string;
+
+  // ─── Option B: Provide address inline ─────────────────────────
+  // لو addressId مش موجود → shippingAddress مطلوب
+  @IsOptional()
   @ValidateNested()
   @Type(() => ShippingAddressDto)
-  shippingAddress: ShippingAddressDto;
+  shippingAddress?: ShippingAddressDto;
 
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
 
-  @IsOptional() @IsString()
+  // ─── Coupon code (validated against DB) ───────────────────────
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

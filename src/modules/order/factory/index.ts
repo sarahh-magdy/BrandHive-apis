@@ -59,21 +59,25 @@ export class OrderFactoryService {
     });
 
     // ─── Shipping Address ─────────────────────────────────────
+    const addr = dto.shippingAddress;
+    if (!addr) {
+      throw new Error('Shipping address is required');
+    }
     order.shippingAddress = {
-      fullName: dto.shippingAddress.fullName,
-      phone: dto.shippingAddress.phone,
-      street: dto.shippingAddress.street,
-      city: dto.shippingAddress.city,
-      governorate: dto.shippingAddress.governorate,
-      postalCode: dto.shippingAddress.postalCode ?? null,
-      country: dto.shippingAddress.country ?? 'Egypt',
+      fullName: addr.fullName,
+      phone: addr.phone,
+      street: addr.street,
+      city: addr.city,
+      governorate: addr.governorate,
+      postalCode: addr.postalCode ?? null,
+      country: addr.country ?? 'Egypt',
     };
 
     // ─── Pricing ──────────────────────────────────────────────
     order.subtotal = cartSummary.subtotal ?? 0;
     order.shippingFee = calculateShippingFee(
       order.subtotal,
-      dto.shippingAddress.governorate,
+      addr.governorate,
     );
     order.tax = calculateTax(order.subtotal);
     order.discount = cartSummary.couponSaving ?? 0;

@@ -18,7 +18,10 @@ import { CartFactoryService } from '../cart/factory';
 
 import { NotificationModule } from '../notification/notification.module';
 import { UserMongoModule } from '../../shared/modules/user-mongo.module';
+import { AddressModule } from '../address/address.module';
 
+import { CouponService } from '../coupon/coupon.service';
+import { CouponModule } from '../coupon/coupon.module';
 @Module({
   imports: [
     UserMongoModule,
@@ -29,6 +32,8 @@ import { UserMongoModule } from '../../shared/modules/user-mongo.module';
       { name: Product.name, schema: ProductSchema },
       { name: Cart.name, schema: CartSchema },
     ]),
+    AddressModule,
+    CouponModule,
   ],
   controllers: [OrderController],
   providers: [
