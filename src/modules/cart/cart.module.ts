@@ -10,11 +10,13 @@ import { Cart, CartSchema } from '../../models/cart/cart.schema';
 import { ProductRepository } from '../../models/product/product.repository';
 import { Product, ProductSchema } from '../../models/product/product.schema';
 import { UserMongoModule } from '../../shared/modules/user-mongo.module';
+import { CouponModule } from '../coupon/coupon.module';
 
 @Module({
   imports: [
     UserMongoModule,
     JwtModule,
+    CouponModule,
     MongooseModule.forFeature([
       { name: Cart.name, schema: CartSchema },
       { name: Product.name, schema: ProductSchema },
@@ -22,7 +24,6 @@ import { UserMongoModule } from '../../shared/modules/user-mongo.module';
   ],
   controllers: [CartController],
   providers: [CartService, CartFactoryService, CartRepository, ProductRepository],
-  // ─── Export عشان الـ Order module يستخدم getCartForOrder ─────────
   exports: [CartService],
 })
-export class CartModule {}
+export class CartModule { }

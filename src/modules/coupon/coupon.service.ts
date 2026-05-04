@@ -19,7 +19,7 @@ export class CouponService {
   constructor(
     private readonly couponRepository: CouponRepository,
     private readonly couponFactory: CouponFactoryService,
-  ) {}
+  ) { }
 
   // ════════════════════════════════════════════════════════════════
   // CREATE COUPON (Admin)

@@ -8,13 +8,8 @@ import { CartRepository } from '@models/index';
 import { ProductRepository } from '@models/index';
 import { CartFactoryService } from './factory';
 import { AddToCartDto, UpdateCartItemDto } from './dto/cart.dto';
+import { CouponService } from '@modules/coupon/coupon.service';
 
-// ─── Hardcoded coupons (استبدلها بـ Coupon model لاحقاً) ──────────
-const VALID_COUPONS: Record<string, number> = {
-  SAVE10: 10,
-  SAVE20: 20,
-  WELCOME: 15,
-};
 
 @Injectable()
 export class CartService {
@@ -22,7 +17,8 @@ export class CartService {
     private readonly cartRepository: CartRepository,
     private readonly productRepository: ProductRepository,
     private readonly cartFactoryService: CartFactoryService,
-  ) {}
+    private readonly couponService: CouponService,
+  ) { }
 
   // ─── Helpers ──────────────────────────────────────────────────
   private async getOrCreateCart(userId: string) {
@@ -210,22 +206,38 @@ export class CartService {
   // APPLY COUPON
   // ════════════════════════════════════════════════════════════════
   async applyCoupon(userId: string, couponCode: string) {
-    const discount = VALID_COUPONS[couponCode.toUpperCase()];
-    if (!discount) throw new BadRequestException('Invalid or expired coupon code');
+    const cart = await this.cartRepository.findCartPopulated(userId);
+
+    if (!cart || !(cart as any).items.length) {
+      throw new BadRequestException('Cart is empty');
+    }
+
+    const mappedCart = this.cartFactoryService.mapCart(cart);
+    const subtotal = mappedCart.subtotal;
+
+    const coupon = await this.couponService.applyCouponOnCart(
+      couponCode,
+      userId,
+      subtotal,
+    );
 
     await this.cartRepository.updateOne(
       { user: new Types.ObjectId(userId) },
-      { couponCode: couponCode.toUpperCase(), couponDiscount: discount },
+      {
+        couponCode: coupon.couponCode,
+        couponDiscount: coupon.couponDiscount,
+        couponId: coupon.couponId, // مهم للـ order بعدين
+      },
       { new: true },
     );
 
     const updatedCart = await this.cartRepository.findCartPopulated(userId);
+
     return {
-      message: `Coupon applied! You get ${discount}% off`,
+      message: 'Coupon applied successfully',
       data: this.cartFactoryService.mapCart(updatedCart),
     };
   }
-
   // ════════════════════════════════════════════════════════════════
   // REMOVE COUPON
   // ════════════════════════════════════════════════════════════════
@@ -290,20 +302,20 @@ export class CartService {
   }
 
   // INTERNAL: used by Order module
- async getCartForOrder(userId: string) {
-  console.log('--- Order Process Started ---');
-  console.log('Searching for Cart with UserID:', userId);
+  async getCartForOrder(userId: string) {
+    console.log('--- Order Process Started ---');
+    console.log('Searching for Cart with UserID:', userId);
 
-  const cart = await this.cartRepository.findCartPopulated(userId);
-  
-  console.log('Cart found in DB:', cart ? 'YES' : 'NO');
-  if (cart) {
-    console.log('Number of items in cart:', cart.items?.length);
-  }
+    const cart = await this.cartRepository.findCartPopulated(userId);
 
-  if (!cart || !(cart as any).items?.length) {
-    throw new BadRequestException('Your cart is empty');
-  }
+    console.log('Cart found in DB:', cart ? 'YES' : 'NO');
+    if (cart) {
+      console.log('Number of items in cart:', cart.items?.length);
+    }
+
+    if (!cart || !(cart as any).items?.length) {
+      throw new BadRequestException('Your cart is empty');
+    }
 
     // ─── Final stock validation before order ──────────────────────
     for (const item of (cart as any).items) {

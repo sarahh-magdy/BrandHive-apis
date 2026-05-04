@@ -37,11 +37,11 @@ const NON_CANCELABLE = [
 ];
 
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  [OrderStatus.PENDING]:   [OrderStatus.CONFIRMED, OrderStatus.CANCELED],
-  [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED,   OrderStatus.CANCELED],
-  [OrderStatus.SHIPPED]:   [OrderStatus.DELIVERED],
+  [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELED],
+  [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.CANCELED],
+  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
   [OrderStatus.DELIVERED]: [],
-  [OrderStatus.CANCELED]:  [],
+  [OrderStatus.CANCELED]: [],
 };
 
 @Injectable()
@@ -55,7 +55,7 @@ export class OrderService {
     private readonly couponService: CouponService,
     private readonly orderFactoryService: OrderFactoryService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   // ════════════════════════════════════════════════════════════════
   // CREATE ORDER
@@ -372,7 +372,7 @@ export class OrderService {
     };
 
     if (dto.status === OrderStatus.CONFIRMED) updates.confirmedAt = new Date();
-    if (dto.status === OrderStatus.SHIPPED)   updates.shippedAt = new Date();
+    if (dto.status === OrderStatus.SHIPPED) updates.shippedAt = new Date();
     if (dto.status === OrderStatus.DELIVERED) {
       updates.deliveredAt = new Date();
       updates.paymentStatus = PaymentStatus.PAID;

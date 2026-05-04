@@ -85,17 +85,16 @@ export class CartFactoryService {
       };
     });
 
-    const couponDiscount = cart.couponDiscount ?? 0;
-    const couponSaving = Math.round((subtotal * couponDiscount) / 100);
+    const couponSaving = cart.couponDiscount ?? 0;
     const total = subtotal - couponSaving;
 
     return {
       id: cart._id?.toString(),
-      items: mappedItems,
       couponCode: cart.couponCode ?? null,
-      couponDiscount,
-      subtotal,
+      couponDiscount: cart.couponDiscount, // قيمة الخصم الفعلية
       couponSaving,
+      items: mappedItems,
+      subtotal,
       total,
       totalItems: mappedItems.length,
       totalQuantity,

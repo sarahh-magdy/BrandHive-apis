@@ -20,4 +20,4 @@ import { UserMongoModule } from '../../shared/modules/user-mongo.module';
   providers: [CouponService, CouponFactoryService, CouponRepository],
   exports: [CouponService],
 })
-export class CouponModule {}
+export class CouponModule { }

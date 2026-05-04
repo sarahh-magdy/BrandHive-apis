@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 
@@ -11,33 +11,34 @@ import { Wishlist, WishlistSchema } from '../../models/wishlist/wishlist.schema'
 import { ProductRepository } from '../../models/product/product.repository';
 import { Product, ProductSchema } from '../../models/product/product.schema';
 
-import { Cart, CartSchema } from '../../models/cart/cart.schema';
-import { CartRepository } from '../../models/cart/cart.repository';
-import { CartService } from '../cart/cart.service';
-import { CartFactoryService } from '../cart/factory';
-
 import { UserMongoModule } from '../../shared/modules/user-mongo.module';
+
+import { CartModule } from '@modules/cart/cart.module';
+import { CouponModule } from '@modules/coupon/coupon.module';
 
 @Module({
   imports: [
     UserMongoModule,
     JwtModule,
+
     MongooseModule.forFeature([
       { name: Wishlist.name, schema: WishlistSchema },
       { name: Product.name, schema: ProductSchema },
-      { name: Cart.name, schema: CartSchema },
     ]),
+
+    forwardRef(() => CartModule),
+    CouponModule,
   ],
+
   controllers: [WishlistController],
+
   providers: [
     WishlistService,
     WishlistFactoryService,
     WishlistRepository,
     ProductRepository,
-    CartService,
-    CartFactoryService,
-    CartRepository,
   ],
+
   exports: [WishlistService],
 })
-export class WishlistModule {}
+export class WishlistModule { }
