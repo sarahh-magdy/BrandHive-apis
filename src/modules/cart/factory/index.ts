@@ -10,7 +10,11 @@ export class CartFactoryService {
     item.product = new Types.ObjectId(product._id);
     item.quantity = quantity;
     item.lockedPrice = product.price;
-    item.lockedDiscountPrice = product.discountPrice ?? null;
+    // ─── FIXED: 0 يتعامل معاه زي null عشان مفيش discount حقيقي ──
+    item.lockedDiscountPrice =
+      product.discountPrice != null && product.discountPrice > 0
+        ? product.discountPrice
+        : null;
     item.priceChanged = false;
     item.currentPrice = product.price;
     item.productName = product.name;
@@ -38,9 +42,21 @@ export class CartFactoryService {
       }
 
       const currentRawPrice = product?.price ?? item.lockedPrice;
-      const currentDiscountPrice = product?.discountPrice ?? null;
+      // ─── FIXED: 0 يتعامل معاه زي null ────────────────────────
+      const currentDiscountPrice =
+        product?.discountPrice != null && product.discountPrice > 0
+          ? product.discountPrice
+          : null;
+
       const currentEffectivePrice = currentDiscountPrice ?? currentRawPrice;
-      const lockedEffectivePrice = item.lockedDiscountPrice ?? item.lockedPrice;
+
+      // ─── FIXED: lockedDiscountPrice = 0 يتعامل معاه زي null ──
+      const lockedDiscountPrice =
+        item.lockedDiscountPrice != null && item.lockedDiscountPrice > 0
+          ? item.lockedDiscountPrice
+          : null;
+
+      const lockedEffectivePrice = lockedDiscountPrice ?? item.lockedPrice;
 
       const priceChanged = currentEffectivePrice !== lockedEffectivePrice;
       const priceDifference = priceChanged
@@ -69,14 +85,13 @@ export class CartFactoryService {
           id: product?._id?.toString() ?? item.product?.toString(),
           name: item.productName,
           slug: product?.slug ?? '',
-          // ─── FIXED: أضفنا sku هنا عشان الـ order factory يلاقيه ──
           sku: product?.sku ?? '',
           image: item.productImage,
           isAvailable,
         },
         quantity: item.quantity,
         lockedPrice: item.lockedPrice,
-        lockedDiscountPrice: item.lockedDiscountPrice,
+        lockedDiscountPrice,
         currentPrice: currentEffectivePrice,
         effectivePrice: lockedEffectivePrice,
         itemTotal,
@@ -91,7 +106,7 @@ export class CartFactoryService {
     return {
       id: cart._id?.toString(),
       couponCode: cart.couponCode ?? null,
-      couponDiscount: cart.couponDiscount, // قيمة الخصم الفعلية
+      couponDiscount: cart.couponDiscount,
       couponSaving,
       items: mappedItems,
       subtotal,
