@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core'; 
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
@@ -20,10 +20,14 @@ import { OrderModule } from './modules/order/order.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AddressModule } from '@modules/address/address.module';
 import { CouponModule } from '@modules/coupon/coupon.module';
+import { PaymentModule } from './modules/payment/payment.module';
+import { AdminModule } from '@modules/admin/admin.module';
+import { SearchModule } from '@modules/search/search.module';
+import { InventoryModule } from '@modules/inventory/inventory.module';
 @Module({
   imports: [
-    ConfigModule.forRoot({  
-      load: [devConfig], 
+    ConfigModule.forRoot({
+      load: [devConfig],
       isGlobal: true,
     }),
     MongooseModule.forRootAsync({
@@ -32,18 +36,22 @@ import { CouponModule } from '@modules/coupon/coupon.module';
         uri: configService.get('database').url,
       }),
     }),
-    UserMongoModule, 
+    UserMongoModule,
     AuthModule,
     ProductModule,
     CategoryModule,
     BrandModule,
     CustomerModule,
-    WishlistModule, 
+    WishlistModule,
     CartModule,
     OrderModule,
     NotificationModule,
     AddressModule,
-    CouponModule
+    CouponModule,
+    PaymentModule,
+    AdminModule,
+    SearchModule,
+    InventoryModule
 
   ],
   controllers: [AppController],
@@ -60,4 +68,4 @@ import { CouponModule } from '@modules/coupon/coupon.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

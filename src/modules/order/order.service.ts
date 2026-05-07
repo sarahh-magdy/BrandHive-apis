@@ -6,20 +6,15 @@ import {
 import { Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { OrderRepository } from '../../models/order/order.repository';
-import { ProductRepository } from '../../models/product/product.repository';
 import { CartService } from '../cart/cart.service';
 import { NotificationService } from '../notification/notification.service';
 import { AddressService } from '../address/address.service';
 import { CouponService } from '../coupon/coupon.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { PaymentService } from '../payment/payment.service';
 import { OrderFactoryService } from './factory';
 import { sendMail } from '../../common/helpers/send-mail.helper';
 import { generateInvoicePDF } from '../../common/helpers/invoice.helper';
-import {
-  initPaymobPayment,
-  initFawryPayment,
-  verifyPayment,
-  PaymentGateway,
-} from '../../common/helpers/payment.helper';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto, CancelOrderDto } from './dto/update-order-status.dto';
 import { GetOrdersDto } from './dto/get-orders.dto';
@@ -28,7 +23,6 @@ import {
   PaymentMethod,
   PaymentStatus,
 } from '../../models/order/order.schema';
-import { NotificationType } from '@models/notification/notification.schema';
 
 const NON_CANCELABLE = [
   OrderStatus.SHIPPED,
@@ -48,11 +42,13 @@ const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export class OrderService {
   constructor(
     private readonly orderRepository: OrderRepository,
-    private readonly productRepository: ProductRepository,
     private readonly cartService: CartService,
     private readonly notificationService: NotificationService,
     private readonly addressService: AddressService,
     private readonly couponService: CouponService,
+    private readonly inventoryService: InventoryService,
+    // ─── CHANGED: PaymentService بدل inline payment code ─────────
+    private readonly paymentService: PaymentService,
     private readonly orderFactoryService: OrderFactoryService,
     private readonly configService: ConfigService,
   ) { }
@@ -61,76 +57,44 @@ export class OrderService {
   // CREATE ORDER
   // ════════════════════════════════════════════════════════════════
   async createOrder(userId: string, dto: CreateOrderDto) {
-    // ─── Resolve shipping address ─────────────────────────────
+    // ─── Resolve address ──────────────────────────────────────
     let resolvedAddress: any;
-
     if (dto.addressId) {
-      // Use saved address from DB
-      resolvedAddress = await this.addressService.getAddressById(
-        dto.addressId,
-        userId,
-      );
+      resolvedAddress = await this.addressService.getAddressById(dto.addressId, userId);
     } else if (dto.shippingAddress) {
-      // Use inline address from request
       resolvedAddress = dto.shippingAddress;
     } else {
-      throw new BadRequestException(
-        'Please provide either addressId or shippingAddress',
-      );
+      throw new BadRequestException('Provide addressId or shippingAddress');
     }
 
-    // ─── Get cart with final validation ──────────────────────
+    // ─── Get cart ─────────────────────────────────────────────
     const cartSummary = await this.cartService.getCartForOrder(userId);
 
-    // ─── Resolve coupon from DB (replaces hardcoded coupons) ─
-    let couponData: {
-      couponId: string;
-      couponCode: string;
-      couponDiscount: number;
-    } | null = null;
-
+    // ─── Resolve coupon ───────────────────────────────────────
+    let couponData: { couponId: string; couponCode: string; couponDiscount: number } | null = null;
     if (dto.couponCode) {
       try {
         couponData = await this.couponService.applyCouponOnCart(
-          dto.couponCode,
-          userId,
-          cartSummary.subtotal,
+          dto.couponCode, userId, cartSummary.subtotal,
         );
       } catch (e) {
         throw new BadRequestException(e.message);
       }
     }
 
-    // ─── Build enriched cart with coupon data ─────────────────
     const enrichedCart = {
       ...cartSummary,
       couponSaving: couponData?.couponDiscount ?? cartSummary.couponSaving ?? 0,
       couponCode: couponData?.couponCode ?? cartSummary.couponCode ?? null,
     };
 
-    // ─── Validate stock & reduce ──────────────────────────────
+    // ─── Reduce stock via InventoryService ─────────────────────
     for (const item of cartSummary.items) {
-      const product = await this.productRepository.getOne({
-        _id: new Types.ObjectId(item.product.id),
-        isDeleted: false,
-        isActive: true,
-      });
-
-      if (!product) {
-        throw new BadRequestException(
-          `"${item.product.name}" is no longer available`,
-        );
-      }
-      if ((product as any).stock < item.quantity) {
-        throw new BadRequestException(
-          `Only ${(product as any).stock} units left for "${item.product.name}"`,
-        );
-      }
-
-      await this.productRepository.updateOne(
-        { _id: (product as any)._id },
-        { $inc: { stock: -item.quantity } },
-        { new: true },
+      await this.inventoryService.reduceStock(
+        item.product.id,
+        item.quantity,
+        'PENDING',
+        userId,
       );
     }
 
@@ -150,59 +114,35 @@ export class OrderService {
     // ─── Clear cart ───────────────────────────────────────────
     await this.cartService.clearCart(userId);
 
-    // ─── Handle online payment ────────────────────────────────
-    let paymentUrl: string | null = null;
+    // ─── CHANGED: Init payment via PaymentService ─────────────
+    const paymentResult = await this.paymentService.initPayment(created);
 
-    if (dto.paymentMethod === PaymentMethod.PAYMOB) {
-      const result = await initPaymobPayment(created);
-      if (result.success) {
-        paymentUrl = result?.paymentUrl ?? null;
-        await this.orderRepository.updateOne(
-          { _id: (created as any)._id },
-          { paymentTransactionId: result.transactionId },
-          { new: true },
-        );
-      }
-    } else if (dto.paymentMethod === PaymentMethod.FAWRY) {
-      const result = await initFawryPayment(created);
-      if (result.success) {
-        paymentUrl = result?.paymentUrl ?? null;
-        await this.orderRepository.updateOne(
-          { _id: (created as any)._id },
-          { paymentTransactionId: result.transactionId },
-          { new: true },
-        );
-      }
-    } else {
-      // COD → auto confirm
+    // COD → auto confirm
+    if (dto.paymentMethod === PaymentMethod.COD) {
       await this.changeStatus(
         (created as any)._id.toString(),
         { status: OrderStatus.CONFIRMED, note: 'COD order auto-confirmed' },
-        null,
-        true,
+        null, true,
       );
     }
 
-    // ─── Invoice (async) ──────────────────────────────────────
+    // ─── Invoice async ────────────────────────────────────────
     const populated = await this.orderRepository.findOnePopulated({
       _id: (created as any)._id,
     });
-    this.buildAndSendInvoice(populated, userId).catch(console.error);
+    this.buildAndSendInvoice(populated).catch(console.error);
 
     // ─── Notification ─────────────────────────────────────────
     await this.notificationService.create({
       user: userId,
-      type: NotificationType.ORDER_PLACED,
+      type: 'order_placed',
       title: 'Order Placed 🎉',
       body: `Your order #${(created as any).orderNumber} has been placed.`,
       data: { orderId: (created as any)._id.toString() },
     });
 
-    const response: any = {
-      message: 'Order created successfully',
-      data: created,
-    };
-    if (paymentUrl) response.paymentUrl = paymentUrl;
+    const response: any = { message: 'Order created successfully', data: created };
+    if (paymentResult?.paymentUrl) response.paymentUrl = paymentResult.paymentUrl;
     return response;
   }
 
@@ -227,10 +167,7 @@ export class OrderService {
       this.orderRepository.countDocuments(filter),
     ]);
 
-    return {
-      data,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -239,7 +176,6 @@ export class OrderService {
   async getOrderDetails(orderId: string, userId: string, role: string) {
     const filter: Record<string, any> = { _id: new Types.ObjectId(orderId) };
     if (role !== 'Admin') filter.user = new Types.ObjectId(userId);
-
     const order = await this.orderRepository.findOnePopulated(filter);
     if (!order) throw new NotFoundException('Order not found');
     return { data: order };
@@ -248,12 +184,7 @@ export class OrderService {
   // ════════════════════════════════════════════════════════════════
   // CANCEL ORDER
   // ════════════════════════════════════════════════════════════════
-  async cancelOrder(
-    orderId: string,
-    userId: string,
-    role: string,
-    dto: CancelOrderDto,
-  ) {
+  async cancelOrder(orderId: string, userId: string, role: string, dto: CancelOrderDto) {
     const filter: Record<string, any> = { _id: new Types.ObjectId(orderId) };
     if (role !== 'Admin') filter.user = new Types.ObjectId(userId);
 
@@ -261,39 +192,29 @@ export class OrderService {
     if (!order) throw new NotFoundException('Order not found');
 
     if (NON_CANCELABLE.includes((order as any).status)) {
-      throw new BadRequestException(
-        `Cannot cancel an order with status: ${(order as any).status}`,
-      );
+      throw new BadRequestException(`Cannot cancel: ${(order as any).status}`);
     }
 
     // ─── Restore stock ────────────────────────────────────────
     for (const item of (order as any).items) {
-      await this.productRepository.updateOne(
-        { _id: item.product },
-        { $inc: { stock: item.quantity } },
-        { new: true },
+      await this.inventoryService.restoreStock(
+        item.product.toString(),
+        item.quantity,
+        orderId,
+        userId,
       );
     }
 
-    // ─── Decrement coupon usage if coupon was used ─────────────
-    // NOTE: نحتاج نحفظ الـ couponId في الـ order schema لو عايزين ده
-    // دلوقتي بنعمل lookup بالـ couponCode
+    // ─── Decrement coupon usage ───────────────────────────────
     if ((order as any).couponCode) {
       try {
         const coupon = await this.couponService.validateAndGetCoupon(
-          (order as any).couponCode,
-          userId,
-          0, // skip amount validation on cancel
+          (order as any).couponCode, userId, 0,
         );
         if (coupon) {
-          await this.couponService.decrementUsage(
-            (coupon as any)._id.toString(),
-            userId,
-          );
+          await this.couponService.decrementUsage((coupon as any)._id.toString(), userId);
         }
-      } catch {
-        // ignore if coupon no longer exists
-      }
+      } catch { /* ignore */ }
     }
 
     await this.orderRepository.updateOne(
@@ -317,9 +238,9 @@ export class OrderService {
 
     await this.notificationService.create({
       user: (order as any).user.toString(),
-      type: NotificationType.ORDER_CANCELED,
+      type: 'order_canceled',
       title: 'Order Canceled',
-      body: `Order #${(order as any).orderNumber} has been canceled.`,
+      body: `Order #${(order as any).orderNumber} canceled.`,
       data: { orderId },
     });
 
@@ -329,11 +250,7 @@ export class OrderService {
   // ════════════════════════════════════════════════════════════════
   // UPDATE ORDER STATUS (Admin)
   // ════════════════════════════════════════════════════════════════
-  async updateOrderStatus(
-    orderId: string,
-    dto: UpdateOrderStatusDto,
-    adminId: string,
-  ) {
+  async updateOrderStatus(orderId: string, dto: UpdateOrderStatusDto, adminId: string) {
     return this.changeStatus(orderId, dto, adminId, false);
   }
 
@@ -343,9 +260,7 @@ export class OrderService {
     adminId: string | null,
     skipValidation: boolean,
   ) {
-    const order = await this.orderRepository.getOne({
-      _id: new Types.ObjectId(orderId),
-    });
+    const order = await this.orderRepository.getOne({ _id: new Types.ObjectId(orderId) });
     if (!order) throw new NotFoundException('Order not found');
 
     const current = (order as any).status as OrderStatus;
@@ -386,35 +301,21 @@ export class OrderService {
     );
 
     const notifMap: Record<string, { type: string; title: string; body: string }> = {
-      [OrderStatus.CONFIRMED]: {
-        type: 'order_confirmed',
-        title: 'Order Confirmed ✅',
-        body: `Order #${(order as any).orderNumber} confirmed.`,
-      },
-      [OrderStatus.SHIPPED]: {
-        type: 'order_shipped',
-        title: 'Order Shipped 🚚',
-        body: `Order #${(order as any).orderNumber} is on the way!`,
-      },
-      [OrderStatus.DELIVERED]: {
-        type: 'order_delivered',
-        title: 'Order Delivered 🎉',
-        body: `Order #${(order as any).orderNumber} delivered.`,
-      },
+      [OrderStatus.CONFIRMED]: { type: 'order_confirmed', title: 'Order Confirmed ✅', body: `Order #${(order as any).orderNumber} confirmed.` },
+      [OrderStatus.SHIPPED]: { type: 'order_shipped', title: 'Order Shipped 🚚', body: `Order #${(order as any).orderNumber} shipped!` },
+      [OrderStatus.DELIVERED]: { type: 'order_delivered', title: 'Order Delivered 🎉', body: `Order #${(order as any).orderNumber} delivered.` },
     };
 
     const notif = notifMap[dto.status];
     if (notif) {
       await this.notificationService.create({
         user: (order as any).user.toString(),
-        type: NotificationType.ORDER_PLACED,
-        title: 'Order placed',
-        body: 'Your order has been placed successfully',
+        ...notif,
         data: { orderId },
       });
     }
 
-    return { message: `Order status updated to "${dto.status}"` };
+    return { message: `Order updated to "${dto.status}"` };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -441,7 +342,7 @@ export class OrderService {
 
     return {
       message: errors.length
-        ? `Added to cart. Unavailable: ${errors.join(', ')}`
+        ? `Added. Unavailable: ${errors.join(', ')}`
         : 'All items added to cart',
     };
   }
@@ -478,34 +379,6 @@ export class OrderService {
   }
 
   // ════════════════════════════════════════════════════════════════
-  // PAYMENT WEBHOOK
-  // ════════════════════════════════════════════════════════════════
-  async verifyPaymentWebhook(gateway: string, transactionId: string) {
-    const result = await verifyPayment(gateway as PaymentGateway, transactionId);
-    if (!result.paid) return { message: 'Payment not confirmed' };
-
-    const order = await this.orderRepository.getOne({
-      paymentTransactionId: transactionId,
-    });
-    if (!order) return { message: 'Order not found' };
-
-    await this.orderRepository.updateOne(
-      { _id: (order as any)._id },
-      { paymentStatus: PaymentStatus.PAID, paidAt: new Date() },
-      { new: true },
-    );
-
-    await this.changeStatus(
-      (order as any)._id.toString(),
-      { status: OrderStatus.CONFIRMED, note: 'Payment verified' },
-      null,
-      true,
-    );
-
-    return { message: 'Payment verified' };
-  }
-
-  // ════════════════════════════════════════════════════════════════
   // ORDER COUNT
   // ════════════════════════════════════════════════════════════════
   async getOrderCount(userId: string) {
@@ -537,14 +410,11 @@ export class OrderService {
       this.orderRepository.countDocuments(filter),
     ]);
 
-    return {
-      data,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  // ─── Private: Build & Email Invoice ───────────────────────────
-  private async buildAndSendInvoice(order: any, _userId: string) {
+  // ─── Private: Invoice ─────────────────────────────────────────
+  private async buildAndSendInvoice(order: any) {
     try {
       const invoicePath = await generateInvoicePDF(order);
       await this.orderRepository.updateOne(
@@ -558,13 +428,13 @@ export class OrderService {
         const url = `${this.configService.get('APP_URL')}/uploads/${invoicePath}`;
         sendMail({
           to: email,
-          subject: `Invoice for Order #${order.orderNumber} - Brand Hive`,
+          subject: `Invoice #${order.orderNumber} - Brand Hive`,
           html: `
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:auto;padding:24px">
-              <h2>Thank you for your order! 🎉</h2>
+            <div style="font-family:Arial,sans-serif;padding:24px">
+              <h2>Thank you! 🎉</h2>
               <p>Order: <b>#${order.orderNumber}</b></p>
               <p>Total: <b>EGP ${order.total?.toFixed(2)}</b></p>
-              <a href="${url}" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:6px">
+              <a href="${url}" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:6px;display:inline-block;margin-top:16px">
                 Download Invoice
               </a>
             </div>

@@ -1,6 +1,12 @@
 import {
-  Controller, Post, Get, Patch, Body,
-  Param, Query, UseGuards,
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -14,11 +20,12 @@ import { User } from '@common/decorators/user.decorator';
 @Controller('orders')
 @UseGuards(AuthGuard, RolesGuard)
 export class OrderController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(private readonly orderService: OrderService) { }
 
   // ────────────────────────────────────────────────────────────────
   // Customer
   // ────────────────────────────────────────────────────────────────
+
   @Post()
   @Auth(['Customer'])
   createOrder(@User() user: any, @Body() dto: CreateOrderDto) {
@@ -45,7 +52,11 @@ export class OrderController {
 
   @Post('my-orders/:id/cancel')
   @Auth(['Customer'])
-  cancelOrder(@Param('id') id: string, @User() user: any, @Body() dto: CancelOrderDto) {
+  cancelOrder(
+    @Param('id') id: string,
+    @User() user: any,
+    @Body() dto: CancelOrderDto,
+  ) {
     return this.orderService.cancelOrder(id, user._id, 'Customer', dto);
   }
 
@@ -61,18 +72,10 @@ export class OrderController {
     return this.orderService.getInvoice(id, user._id, 'Customer');
   }
 
-  // ─── Payment webhook (no auth — called by payment gateway) ────
-  @Post('webhook/:gateway')
-  paymentWebhook(
-    @Param('gateway') gateway: string,
-    @Body() body: { transactionId: string },
-  ) {
-    return this.orderService.verifyPaymentWebhook(gateway, body.transactionId);
-  }
-
   // ────────────────────────────────────────────────────────────────
   // Admin
   // ────────────────────────────────────────────────────────────────
+
   @Get('admin/all')
   @Auth(['Admin'])
   getAllOrders(@Query() query: GetOrdersDto) {
@@ -97,7 +100,11 @@ export class OrderController {
 
   @Post('admin/:id/cancel')
   @Auth(['Admin'])
-  adminCancelOrder(@Param('id') id: string, @User() user: any, @Body() dto: CancelOrderDto) {
+  adminCancelOrder(
+    @Param('id') id: string,
+    @User() user: any,
+    @Body() dto: CancelOrderDto,
+  ) {
     return this.orderService.cancelOrder(id, user._id, 'Admin', dto);
   }
 

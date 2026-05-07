@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { NotificationEntity } from '../entities/notification.entity';
-import { NotificationType } from '../../../models/notification/notification.schema';
+import { NotificationEntity, NotificationTypeEnum } from '../entities/notification.entity';
 
 export interface BuildNotificationInput {
   user: string;
-  type: NotificationType;
+  // ─── FIXED: بدلنا NotificationType بـ string عشان نقدر نبعت
+  // القيم من أي مكان من غير ما نـ import الـ enum في كل service
+  type: string;
   title: string;
   body: string;
   data?: Record<string, any>;
@@ -16,7 +17,8 @@ export class NotificationFactoryService {
   build(input: BuildNotificationInput): Omit<NotificationEntity, '_id'> {
     return {
       user: new Types.ObjectId(input.user),
-      type: input.type ?? NotificationType.GENERAL,
+      // ─── FIXED: cast to enum ────────────────────────────────
+      type: (input.type as NotificationTypeEnum) ?? NotificationTypeEnum.GENERAL,
       title: input.title,
       body: input.body,
       data: input.data ?? null,

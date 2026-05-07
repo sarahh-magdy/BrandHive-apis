@@ -1,118 +1,93 @@
-// import {
-//   IsArray,
-//   IsEnum,
-//   IsInt,
-//   IsMongoId,
-//   IsNumber,
-//   IsOptional,
-//   IsString,
-//   Max,
-//   Min,
-// } from 'class-validator';
-// import { Transform, Type } from 'class-transformer';
-// import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+    IsArray,
+    IsBoolean,
+    IsEnum,
+    IsInt,
+    IsMongoId,
+    IsNumber,
+    IsOptional,
+    IsString,
+    Max,
+    Min,
+} from 'class-validator';
 
-// export enum SearchSortBy {
-//   RELEVANCE = 'relevance',
-//   NEWEST = 'newest',
-//   PRICE_LOW = 'price_low',
-//   PRICE_HIGH = 'price_high',
-//   RATING = 'rating',
-//   BEST_SELLING = 'best_selling',
-// }
+export enum SortBy {
+    NEWEST = 'newest',
+    PRICE_ASC = 'price_asc',
+    PRICE_DESC = 'price_desc',
+    RATING = 'rating',
+    BEST_SELLING = 'best_selling',
+    RELEVANCE = 'relevance',
+}
 
-// export class SearchDto {
-//   // ── Core query ─────────────────────────────────────────────
+export class SearchProductsDto {
+    // ─── Pagination ───────────────────────────────────────────────
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    page?: number = 1;
 
-//   @ApiPropertyOptional({ example: 'wireless headphones', description: 'Text search query' })
-//   @IsOptional()
-//   @IsString()
-//   q?: string;
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(100)
+    limit?: number = 12;
 
-//   // ── Category / Brand ────────────────────────────────────────
+    // ─── Search ───────────────────────────────────────────────────
+    @IsOptional()
+    @IsString()
+    search?: string;
 
-//   @ApiPropertyOptional({ description: 'Filter by category ID' })
-//   @IsOptional()
-//   @IsMongoId()
-//   categoryId?: string;
+    // ─── Filters ──────────────────────────────────────────────────
+    @IsOptional()
+    @IsMongoId()
+    category?: string;
 
-//   @ApiPropertyOptional({ description: 'Filter by brand ID' })
-//   @IsOptional()
-//   @IsMongoId()
-//   brandId?: string;
+    // single or multiple brands: brand=id1,id2
+    @IsOptional()
+    @IsString()
+    brand?: string;
 
-//   @ApiPropertyOptional({
-//     description: 'Filter by multiple brand IDs (comma-separated)',
-//     example: '64abc,64def',
-//   })
-//   @IsOptional()
-//   @Transform(({ value }) =>
-//     typeof value === 'string' ? value.split(',').map((v: string) => v.trim()) : value,
-//   )
-//   @IsArray()
-//   @IsMongoId({ each: true })
-//   brandIds?: string[];
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
+    minPrice?: number;
 
-//   // ── Price range ──────────────────────────────────────────────
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
+    maxPrice?: number;
 
-//   @ApiPropertyOptional({ example: 100, description: 'Min price (EGP)' })
-//   @IsOptional()
-//   @Type(() => Number)
-//   @IsNumber()
-//   @Min(0)
-//   minPrice?: number;
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(1)
+    @Max(5)
+    minRating?: number;
 
-//   @ApiPropertyOptional({ example: 5000, description: 'Max price (EGP)' })
-//   @IsOptional()
-//   @Type(() => Number)
-//   @IsNumber()
-//   @Min(0)
-//   maxPrice?: number;
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    inStock?: boolean;
 
-//   // ── Rating ───────────────────────────────────────────────────
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    onSale?: boolean;
 
-//   @ApiPropertyOptional({ example: 4, description: 'Minimum average rating' })
-//   @IsOptional()
-//   @Type(() => Number)
-//   @IsNumber()
-//   @Min(1)
-//   @Max(5)
-//   minRating?: number;
+    // ─── Sorting ──────────────────────────────────────────────────
+    @IsOptional()
+    @IsEnum(SortBy)
+    sortBy?: SortBy = SortBy.NEWEST;
 
-//   // ── Stock ────────────────────────────────────────────────────
-
-//   @ApiPropertyOptional({ description: 'Show only in-stock products' })
-//   @IsOptional()
-//   @Transform(({ value }) => value === 'true' || value === true)
-//   inStockOnly?: boolean;
-
-//   // ── Sorting ──────────────────────────────────────────────────
-
-//   @ApiPropertyOptional({ enum: SearchSortBy, default: SearchSortBy.RELEVANCE })
-//   @IsOptional()
-//   @IsEnum(SearchSortBy)
-//   sortBy?: SearchSortBy = SearchSortBy.RELEVANCE;
-
-//   // ── Pagination ───────────────────────────────────────────────
-
-//   @ApiPropertyOptional({ default: 1 })
-//   @IsOptional()
-//   @Type(() => Number)
-//   @IsInt()
-//   @Min(1)
-//   page?: number = 1;
-
-//   @ApiPropertyOptional({ default: 20, maximum: 100 })
-//   @IsOptional()
-//   @Type(() => Number)
-//   @IsInt()
-//   @Min(1)
-//   @Max(100)
-//   limit?: number = 20;
-// }
-
-// export class AutocompleteDto {
-//   @ApiPropertyOptional({ example: 'wire', description: 'Partial query for suggestions' })
-//   @IsString()
-//   q: string;
-// }
+    // ─── Facets (return sidebar filters data) ─────────────────────
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    withFacets?: boolean = false;
+}

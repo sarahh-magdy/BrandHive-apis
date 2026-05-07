@@ -8,8 +8,8 @@ import { OrderFactoryService } from './factory';
 import { OrderRepository } from '../../models/order/order.repository';
 import { Order, OrderSchema } from '../../models/order/order.schema';
 
-import { ProductRepository } from '../../models/product/product.repository';
 import { Product, ProductSchema } from '../../models/product/product.schema';
+import { ProductRepository } from '../../models/product/product.repository';
 
 import { Cart, CartSchema } from '../../models/cart/cart.schema';
 import { CartRepository } from '../../models/cart/cart.repository';
@@ -17,23 +17,27 @@ import { CartService } from '../cart/cart.service';
 import { CartFactoryService } from '../cart/factory';
 
 import { NotificationModule } from '../notification/notification.module';
-import { UserMongoModule } from '../../shared/modules/user-mongo.module';
+import { PaymentModule } from '../payment/payment.module';
 import { AddressModule } from '../address/address.module';
-
-import { CouponService } from '../coupon/coupon.service';
 import { CouponModule } from '../coupon/coupon.module';
+import { InventoryModule } from '../inventory/inventory.module';
+import { UserMongoModule } from '../../shared/modules/user-mongo.module';
+
 @Module({
   imports: [
     UserMongoModule,
     JwtModule,
     NotificationModule,
+    // ─── CHANGED: أضفنا PaymentModule, AddressModule, CouponModule, InventoryModule
+    PaymentModule,
+    AddressModule,
+    CouponModule,
+    InventoryModule,
     MongooseModule.forFeature([
       { name: Order.name, schema: OrderSchema },
       { name: Product.name, schema: ProductSchema },
       { name: Cart.name, schema: CartSchema },
     ]),
-    AddressModule,
-    CouponModule,
   ],
   controllers: [OrderController],
   providers: [
@@ -47,4 +51,4 @@ import { CouponModule } from '../coupon/coupon.module';
   ],
   exports: [OrderService],
 })
-export class OrderModule {}
+export class OrderModule { }

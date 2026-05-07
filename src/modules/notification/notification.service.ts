@@ -9,12 +9,12 @@ export class NotificationService {
   constructor(
     private readonly notificationRepository: NotificationRepository,
     private readonly notificationFactory: NotificationFactoryService,
-  ) {}
+  ) { }
 
   // ─── Create (called internally from other services) ───────────
   async create(input: BuildNotificationInput) {
     const entity = this.notificationFactory.build(input);
-    return this.notificationRepository.create({ ...entity });
+    return this.notificationRepository.create({ ...entity } as any);
   }
 
   // ─── Get User Notifications ───────────────────────────────────

@@ -13,29 +13,29 @@ export type SearchHistoryDocument = SearchHistory & Document;
  */
 @Schema({ timestamps: true })
 export class SearchHistory {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  userId: Types.ObjectId;
+    @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
+    userId: Types.ObjectId;
 
-  @Prop({ required: true, maxlength: 200, index: true })
-  query: string;
+    @Prop({ required: true, maxlength: 200, index: true })
+    query: string;
 
-  /** Normalised lowercase version for deduplication */
-  @Prop({ required: true })
-  queryNorm: string;
+    /** Normalised lowercase version for deduplication */
+    @Prop({ required: true })
+    queryNorm: string;
 
-  /** How many results were returned for this query */
-  @Prop({ default: 0 })
-  resultsCount: number;
+    /** How many results were returned for this query */
+    @Prop({ default: 0 })
+    resultsCount: number;
 
-  /** Filters applied alongside the query (stored for analytics) */
-  @Prop({ type: Object, default: {} })
-  appliedFilters: Record<string, any>;
+    /** Filters applied alongside the query (stored for analytics) */
+    @Prop({ type: Object, default: {} })
+    appliedFilters: Record<string, any>;
 
-  /** Did the user click a result after this search? */
-  @Prop({ default: false })
-  resulted_in_click: boolean;
+    /** Did the user click a result after this search? */
+    @Prop({ default: false })
+    resulted_in_click: boolean;
 
-  createdAt: Date;
+    createdAt: Date;
 }
 
 export const SearchHistorySchema = SchemaFactory.createForClass(SearchHistory);
@@ -53,14 +53,14 @@ export type PopularSearchDocument = PopularSearch & Document;
  */
 @Schema({ timestamps: true })
 export class PopularSearch {
-  @Prop({ required: true, unique: true })
-  query: string;
+    @Prop({ required: true, unique: true })
+    query: string;
 
-  @Prop({ required: true, default: 1 })
-  count: number;
+    @Prop({ required: true, default: 1 })
+    count: number;
 
-  @Prop({ default: () => new Date() })
-  lastSearchedAt: Date;
+    @Prop({ default: () => new Date() })
+    lastSearchedAt: Date;
 }
 
 export const PopularSearchSchema = SchemaFactory.createForClass(PopularSearch);
