@@ -57,6 +57,7 @@ export class OrderService {
   // CREATE ORDER
   // ════════════════════════════════════════════════════════════════
   async createOrder(userId: string, dto: CreateOrderDto) {
+
     // ─── Resolve address ──────────────────────────────────────
     let resolvedAddress: any;
     if (dto.addressId) {
@@ -70,6 +71,9 @@ export class OrderService {
     // ─── Get cart ─────────────────────────────────────────────
     const cartSummary = await this.cartService.getCartForOrder(userId);
 
+    if (!cartSummary?.items?.length) {
+      throw new BadRequestException('Cart is empty');
+    }
     // ─── Resolve coupon ───────────────────────────────────────
     let couponData: { couponId: string; couponCode: string; couponDiscount: number } | null = null;
     if (dto.couponCode) {
