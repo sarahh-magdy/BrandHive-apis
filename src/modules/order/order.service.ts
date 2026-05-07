@@ -47,7 +47,6 @@ export class OrderService {
     private readonly addressService: AddressService,
     private readonly couponService: CouponService,
     private readonly inventoryService: InventoryService,
-    // ─── CHANGED: PaymentService بدل inline payment code ─────────
     private readonly paymentService: PaymentService,
     private readonly orderFactoryService: OrderFactoryService,
     private readonly configService: ConfigService,
@@ -74,6 +73,7 @@ export class OrderService {
     if (!cartSummary?.items?.length) {
       throw new BadRequestException('Cart is empty');
     }
+
     // ─── Resolve coupon ───────────────────────────────────────
     let couponData: { couponId: string; couponCode: string; couponDiscount: number } | null = null;
     if (dto.couponCode) {
@@ -92,16 +92,6 @@ export class OrderService {
       couponCode: couponData?.couponCode ?? cartSummary.couponCode ?? null,
     };
 
-    // ─── Reduce stock via InventoryService ─────────────────────
-    for (const item of cartSummary.items) {
-      await this.inventoryService.reduceStock(
-        item.product.id,
-        item.quantity,
-        'PENDING',
-        userId,
-      );
-    }
-
     // ─── Build & save order ───────────────────────────────────
     const orderEntity = this.orderFactoryService.buildOrder(
       { ...dto, shippingAddress: resolvedAddress },
@@ -109,6 +99,16 @@ export class OrderService {
       enrichedCart,
     );
     const created = await this.orderRepository.create({ ...orderEntity });
+
+    // ─── Reduce stock AFTER order is created ─────────────────
+    for (const item of cartSummary.items) {
+      await this.inventoryService.reduceStock(
+        item.product.id,
+        item.quantity,
+        (created as any)._id.toString(),
+        userId,
+      );
+    }
 
     // ─── Increment coupon usage ───────────────────────────────
     if (couponData?.couponId) {
@@ -118,10 +118,10 @@ export class OrderService {
     // ─── Clear cart ───────────────────────────────────────────
     await this.cartService.clearCart(userId);
 
-    // ─── CHANGED: Init payment via PaymentService ─────────────
+    // ─── Init payment via PaymentService ─────────────────────
     const paymentResult = await this.paymentService.initPayment(created);
 
-    // COD → auto confirm
+    // ─── COD → auto confirm ───────────────────────────────────
     if (dto.paymentMethod === PaymentMethod.COD) {
       await this.changeStatus(
         (created as any)._id.toString(),
