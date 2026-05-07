@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { QueryFilter, Model } from 'mongoose';
+import { QueryFilter, Model, Types } from 'mongoose';
 import { AbstractRepository } from '../abstract.repository';
 import { Brand } from './brand.schema';
 
@@ -28,5 +28,25 @@ export class BrandRepository extends AbstractRepository<Brand> {
 
   async countDocuments(filter: QueryFilter<Brand>): Promise<number> {
     return this.brandModel.countDocuments(filter).exec();
+  }
+
+  // ─── Brands by category ────────────────────────────────────────
+  async findByCategory(
+    categoryId: Types.ObjectId,
+    options: { skip: number; limit: number },
+  ) {
+    return this.brandModel
+      .find({ categories: categoryId, isDeleted: false, isActive: true })
+      .populate('categories', 'name slug')
+      .skip(options.skip)
+      .limit(options.limit)
+      .lean()
+      .exec();
+  }
+
+  async countByCategory(categoryId: Types.ObjectId): Promise<number> {
+    return this.brandModel
+      .countDocuments({ categories: categoryId, isDeleted: false, isActive: true })
+      .exec();
   }
 }

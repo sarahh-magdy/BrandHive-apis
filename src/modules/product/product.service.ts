@@ -24,7 +24,7 @@ export class ProductService {
     private readonly productFactoryService: ProductFactoryService,
     private readonly brandService: BrandService,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   // ─────────────────────────────────────────────────────────────
   // CREATE PRODUCT  

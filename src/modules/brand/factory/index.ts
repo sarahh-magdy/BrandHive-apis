@@ -3,7 +3,7 @@ import slugify from 'slugify';
 import { Types } from 'mongoose';
 // ─── FIXED: import BrandRequestStatus من نفس الـ entity ───────────
 import { Brand } from '../entities/brand.entity';
-import { BrandRequest , BrandRequestStatus } from '../entities/brand-reruest.entity';
+import { BrandRequest, BrandRequestStatus } from '../entities/brand-reruest.entity';
 import { CreateBrandDto } from '../dto/create-brand.dto';
 import { UpdateBrandDto } from '../dto/update-brand.dto';
 import { RequestBrandDto } from '../dto/request-brand.dto';
@@ -17,7 +17,7 @@ export class BrandFactoryService {
   constructor(
     private readonly brandRepository: BrandRepository,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   private buildSlug(name: string): string {
     return slugify(name, { lower: true, trim: true, replacement: '-' });

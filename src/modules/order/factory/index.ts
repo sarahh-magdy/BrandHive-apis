@@ -38,8 +38,8 @@ export class OrderFactoryService {
         (item.product?.sku && item.product.sku !== '')
           ? item.product.sku
           : (item.sku && item.sku !== '')
-          ? item.sku
-          : `BH-${productId.toString().slice(-6).toUpperCase()}`;
+            ? item.sku
+            : `BH-${productId.toString().slice(-6).toUpperCase()}`;
 
       const productName =
         item.product?.name ?? item.productName ?? 'Unknown Product';

@@ -33,4 +33,4 @@ import { CloudinaryModule } from '../../config/cloudinary/cloudinary.module';
   ],
   exports: [BrandService],
 })
-export class BrandModule {}
+export class BrandModule { }

@@ -14,7 +14,7 @@ export class ProductFactoryService {
   constructor(
     private readonly productRepository: ProductRepository,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   private buildSlug(name: string): string {
     return slugify(name, { lower: true, trim: true, replacement: '-' });

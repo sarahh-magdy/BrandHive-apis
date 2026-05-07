@@ -47,4 +47,4 @@ import { CloudinaryModule } from '../../config/cloudinary/cloudinary.module';
   ],
   exports: [ProductService],
 })
-export class ProductModule {}
+export class ProductModule { }

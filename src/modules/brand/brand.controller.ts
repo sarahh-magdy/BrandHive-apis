@@ -27,9 +27,10 @@ import { multerMemoryConfig } from '../../config/cloudinary/multer-memory.config
 @Controller('brand')
 @UseGuards(AuthGuard)
 export class BrandController {
-  constructor(private readonly brandService: BrandService) {}
+  constructor(private readonly brandService: BrandService) { }
 
-  // Admin Only
+  // ─── Admin Only ────────────────────────────────────────────────
+
   @Post()
   @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
@@ -42,7 +43,6 @@ export class BrandController {
     return { success: true, message: 'Brand created successfully', data };
   }
 
-  // Admin Only
   @Put(':id')
   @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
@@ -56,7 +56,6 @@ export class BrandController {
     return { success: true, message: 'Brand updated successfully', data };
   }
 
-  // Admin Only
   @Delete(':id')
   @Auth(['Admin'])
   async deleteBrand(@Param('id') id: string, @User() user: any) {
@@ -78,8 +77,6 @@ export class BrandController {
     return { success: true, message: 'Brand deactivated successfully', data };
   }
 
-
-
   @Get('requests')
   @Auth(['Admin'])
   async findAllRequests(@Query() query: GetBrandsDto) {
@@ -91,7 +88,6 @@ export class BrandController {
       meta: result.meta,
     };
   }
-
 
   @Patch('requests/:requestId/approve')
   @Auth(['Admin'])
@@ -122,7 +118,24 @@ export class BrandController {
     };
   }
 
-  // Admin + Customer + Seller
+  // ─── Static routes (must come before :id) ─────────────────────
+
+  @Get('by-category/:categoryId')
+  @Auth(['Admin', 'Customer', 'Seller'])
+  async findByCategory(
+    @Param('categoryId') categoryId: string,
+    @Query() query: GetBrandsDto,
+  ) {
+    const result = await this.brandService.findByCategory(categoryId, query);
+    return {
+      success: true,
+      message: 'Brands fetched successfully',
+      data: result.data,
+      meta: result.meta,
+    };
+  }
+
+  // ─── Admin + Customer + Seller ─────────────────────────────────
 
   @Get()
   @Auth(['Admin', 'Customer', 'Seller'])
@@ -143,7 +156,7 @@ export class BrandController {
     return { success: true, message: 'Brand fetched successfully', data };
   }
 
-  // ─── Brand Request (Seller + Customer) 
+  // ─── Seller + Customer ─────────────────────────────────────────
 
   @Post('request')
   @Auth(['Seller', 'Customer'])

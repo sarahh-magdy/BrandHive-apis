@@ -17,7 +17,6 @@ import { RequestBrandDto } from './dto/request-brand.dto';
 import { RejectBrandDto } from './dto/reject-brand.dto';
 import { UpdateBrandStatsDto } from './dto/update-brand-stats.dto';
 import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
-//  NEW: أضفنا AuthService عشان نعمل seller account عند الـ approve
 import { AuthService } from '../auth/auth.service';
 
 @Injectable()
@@ -27,18 +26,17 @@ export class BrandService {
     private readonly brandRequestRepository: BrandRequestRepository,
     private readonly brandFactoryService: BrandFactoryService,
     private readonly cloudinaryService: CloudinaryService,
-    //  NEW: inject AuthService 
     private readonly authService: AuthService,
-  ) {}
+  ) { }
 
-  //  Create Brand 
+  // ─── Create Brand ──────────────────────────────────────────────
   async createBrand(dto: CreateBrandDto, user: any, logoFile?: Express.Multer.File) {
     const brand = await this.brandFactoryService.createBrand(dto, user, logoFile);
     await this.checkSlugConflict(brand.slug);
     return this.brandRepository.create({ ...brand } as any);
   }
 
-  //  Find All 
+  // ─── Find All ──────────────────────────────────────────────────
   async findAll(query: GetBrandsDto) {
     const { page = 1, limit = 10, search, category, isActive } = query;
     const skip = (page - 1) * limit;
@@ -61,7 +59,21 @@ export class BrandService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  //  Find One 
+  // ─── Find By Category ──────────────────────────────────────────
+  async findByCategory(categoryId: string, query: GetBrandsDto) {
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+    const id = new Types.ObjectId(categoryId);
+
+    const [data, total] = await Promise.all([
+      this.brandRepository.findByCategory(id, { skip, limit }),
+      this.brandRepository.countByCategory(id),
+    ]);
+
+    return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+  }
+
+  // ─── Find One ──────────────────────────────────────────────────
   async findOne(id: string) {
     const brand = await this.brandRepository.getOne({
       _id: new Types.ObjectId(id),
@@ -71,7 +83,7 @@ export class BrandService {
     return brand;
   }
 
-  //  Update Brand 
+  // ─── Update Brand ──────────────────────────────────────────────
   async updateBrand(id: string, dto: UpdateBrandDto, user: any, logoFile?: Express.Multer.File) {
     const updates = await this.brandFactoryService.updateBrand(id, dto, user, logoFile);
     if (updates.slug) await this.checkSlugConflict(updates.slug, id);
@@ -85,7 +97,7 @@ export class BrandService {
     return updated;
   }
 
-  //  Delete Brand 
+  // ─── Delete Brand ──────────────────────────────────────────────
   async deleteBrand(id: string, user: any) {
     const brand = await this.brandRepository.getOne({ _id: new Types.ObjectId(id), isDeleted: false });
     if (!brand) throw new NotFoundException('Brand not found');
@@ -101,7 +113,7 @@ export class BrandService {
     );
   }
 
-  //  Activate 
+  // ─── Activate ──────────────────────────────────────────────────
   async activateBrand(id: string, user: any) {
     const brand = await this.brandRepository.getOne({ _id: new Types.ObjectId(id), isDeleted: false });
     if (!brand) throw new NotFoundException('Brand not found');
@@ -114,7 +126,7 @@ export class BrandService {
     );
   }
 
-  //  Deactivate ──
+  // ─── Deactivate ────────────────────────────────────────────────
   async deactivateBrand(id: string, user: any) {
     const brand = await this.brandRepository.getOne({ _id: new Types.ObjectId(id), isDeleted: false });
     if (!brand) throw new NotFoundException('Brand not found');
@@ -127,7 +139,7 @@ export class BrandService {
     );
   }
 
-  //  Request Brand ──
+  // ─── Request Brand ─────────────────────────────────────────────
   async requestBrand(dto: RequestBrandDto, user: any, logoFile?: Express.Multer.File) {
     const slug = dto.name.toLowerCase().trim().replace(/\s+/g, '-');
 
@@ -141,10 +153,10 @@ export class BrandService {
     if (pendingRequest) throw new ConflictException('A pending request for this brand already exists');
 
     const request = await this.brandFactoryService.createBrandRequest(dto, user, logoFile);
-    return this.brandRequestRepository.create({ ...request, whatsappLink: dto.whatsappLink }as any);
+    return this.brandRequestRepository.create({ ...request, whatsappLink: dto.whatsappLink } as any);
   }
 
-  //  Find All Requests ─
+  // ─── Find All Requests ─────────────────────────────────────────
   async findAllRequests(query: GetBrandsDto) {
     const { page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
@@ -159,7 +171,7 @@ export class BrandService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  //  Approve Brand Request 
+  // ─── Approve Brand Request ─────────────────────────────────────
   async approveBrand(requestId: string, user: any) {
     const request = await this.brandRequestRepository.getOne({
       _id: new Types.ObjectId(requestId),
@@ -170,13 +182,9 @@ export class BrandService {
     const slug = (request as any).name.toLowerCase().trim().replace(/\s+/g, '-');
     await this.checkSlugConflict(slug);
 
-    //  Create the brand ─
     const brand = this.brandFactoryService.buildBrandFromRequest(request as any, user);
-    const createdBrand = await this.brandRepository.create({ ...brand }as any);
+    const createdBrand = await this.brandRepository.create({ ...brand } as any);
 
-    //  NEW: Create seller account for the requester 
-    // الـ flow: Customer → requestBrand → Admin approves → Customer becomes Seller
-    // بنـ populate الـ requestedBy عشان نجيب الـ email
     const populatedRequest = await this.brandRequestRepository.getOne({
       _id: new Types.ObjectId(requestId),
     });
@@ -193,7 +201,6 @@ export class BrandService {
       });
     }
 
-    //  Update request status ──
     await this.brandRequestRepository.updateOne(
       { _id: new Types.ObjectId(requestId) },
       {
@@ -207,7 +214,7 @@ export class BrandService {
     return createdBrand;
   }
 
-  //  Reject Brand Request ─
+  // ─── Reject Brand Request ──────────────────────────────────────
   async rejectBrand(requestId: string, dto: RejectBrandDto, user: any) {
     const request = await this.brandRequestRepository.getOne({
       _id: new Types.ObjectId(requestId),
@@ -231,7 +238,7 @@ export class BrandService {
     );
   }
 
-  //  Update Brand Stats 
+  // ─── Update Brand Stats ────────────────────────────────────────
   async updateBrandStats(brandId: string, stats: UpdateBrandStatsDto) {
     const brand = await this.brandRepository.getOne({
       _id: new Types.ObjectId(brandId),
@@ -252,7 +259,7 @@ export class BrandService {
     );
   }
 
-  //  Private ─
+  // ─── Private ───────────────────────────────────────────────────
   private async checkSlugConflict(slug: string, excludeId?: string) {
     const filter: Record<string, any> = { slug, isDeleted: false };
     if (excludeId) filter._id = { $ne: new Types.ObjectId(excludeId) };

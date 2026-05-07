@@ -25,12 +25,12 @@ import { User } from '@common/decorators/user.decorator';
 @Controller('product')
 @UseGuards(AuthGuard)
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(private readonly productService: ProductService) { }
 
-  // Admin + Seller
+  // ─── Admin + Seller ────────────────────────────────────────────
 
   @Post()
-  @Auth(['Admin', 'Seller' ])
+  @Auth(['Admin', 'Seller'])
   @UseInterceptors(FilesInterceptor('images', 10, multerMemoryConfig))
   async createProduct(
     @Body() dto: CreateProductDto,
@@ -41,9 +41,8 @@ export class ProductController {
     return { success: true, message: 'Product created successfully', data };
   }
 
-
   @Put(':id')
-  @Auth(['Admin', 'Seller' ])
+  @Auth(['Admin', 'Seller'])
   @UseInterceptors(FilesInterceptor('images', 10, multerMemoryConfig))
   async updateProduct(
     @Param('id') id: string,
@@ -55,6 +54,7 @@ export class ProductController {
     return { success: true, message: 'Product updated successfully', data };
   }
 
+  // ─── Admin Only ────────────────────────────────────────────────
 
   @Delete(':id')
   @Auth(['Admin'])
@@ -63,14 +63,12 @@ export class ProductController {
     return { success: true, message: 'Product deleted successfully' };
   }
 
-
   @Patch(':id/activate')
   @Auth(['Admin'])
   async activateProduct(@Param('id') id: string, @User() user: any) {
     const data = await this.productService.activateProduct(id, user);
     return { success: true, message: 'Product activated successfully', data };
   }
-
 
   @Patch(':id/deactivate')
   @Auth(['Admin'])
@@ -79,7 +77,39 @@ export class ProductController {
     return { success: true, message: 'Product deactivated successfully', data };
   }
 
-  // All Roles
+  // ─── Static routes (must come before :id) ─────────────────────
+
+  @Get('by-category/:categoryId')
+  @Auth(['Admin', 'Seller', 'Customer'])
+  async findByCategory(
+    @Param('categoryId') categoryId: string,
+    @Query() query: GetProductsDto,
+  ) {
+    const result = await this.productService.findAll({ ...query, category: categoryId });
+    return {
+      success: true,
+      message: 'Products fetched successfully',
+      data: result.data,
+      meta: result.meta,
+    };
+  }
+
+  @Get('by-brand/:brandId')
+  @Auth(['Admin', 'Seller', 'Customer'])
+  async findByBrand(
+    @Param('brandId') brandId: string,
+    @Query() query: GetProductsDto,
+  ) {
+    const result = await this.productService.findAll({ ...query, brand: brandId });
+    return {
+      success: true,
+      message: 'Products fetched successfully',
+      data: result.data,
+      meta: result.meta,
+    };
+  }
+
+  // ─── All Roles ─────────────────────────────────────────────────
 
   @Get()
   @Auth(['Admin', 'Seller', 'Customer'])
