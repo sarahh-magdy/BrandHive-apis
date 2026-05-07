@@ -14,6 +14,8 @@ export class NotificationService {
   // ─── Create (called internally from other services) ───────────
   async create(input: BuildNotificationInput) {
     const entity = this.notificationFactory.build(input);
+    // ─── Guard: لو الـ user مش valid (زي 'ADMIN') → skip ─────
+    if (!entity) return null;
     return this.notificationRepository.create({ ...entity } as any);
   }
 

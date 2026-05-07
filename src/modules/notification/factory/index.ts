@@ -4,8 +4,6 @@ import { NotificationEntity, NotificationTypeEnum } from '../entities/notificati
 
 export interface BuildNotificationInput {
   user: string;
-  // ─── FIXED: بدلنا NotificationType بـ string عشان نقدر نبعت
-  // القيم من أي مكان من غير ما نـ import الـ enum في كل service
   type: string;
   title: string;
   body: string;
@@ -14,10 +12,14 @@ export interface BuildNotificationInput {
 
 @Injectable()
 export class NotificationFactoryService {
-  build(input: BuildNotificationInput): Omit<NotificationEntity, '_id'> {
+  build(input: BuildNotificationInput): Omit<NotificationEntity, '_id'> | null {
+    // ─── Guard: لو الـ user مش valid ObjectId → return null ───
+    if (!Types.ObjectId.isValid(input.user)) {
+      return null;
+    }
+
     return {
       user: new Types.ObjectId(input.user),
-      // ─── FIXED: cast to enum ────────────────────────────────
       type: (input.type as NotificationTypeEnum) ?? NotificationTypeEnum.GENERAL,
       title: input.title,
       body: input.body,
