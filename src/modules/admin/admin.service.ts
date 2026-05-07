@@ -34,8 +34,9 @@ export class AdminService {
             ordersByStatus,
         ] = await Promise.all([
             this.userModel.countDocuments({}),
-            this.userModel.countDocuments({ role: 'Customer' }),
-            this.userModel.countDocuments({ role: 'Seller' }),
+            // ─── FIXED: lowercase roles ────────────────────────────
+            this.userModel.countDocuments({ role: 'customer' }),
+            this.userModel.countDocuments({ role: 'seller' }),
             this.orderModel.countDocuments({}),
             this.productModel.countDocuments({ isDeleted: false }),
             this.reviewModel.countDocuments({}),
@@ -92,7 +93,12 @@ export class AdminService {
     async getRevenueAnalytics(query: AnalyticsDto) {
         const { period = AnalyticsPeriod.MONTH, dateFrom, dateTo } = query;
 
-        const match: Record<string, any> = { paymentStatus: 'paid' };
+        // ─── FIXED: revenue بيشمل كل الـ orders مش بس paid ────────
+        // السبب: الـ COD orders بتبقى paid بس لما تتdelivered
+        // عشان الـ analytics تبقى مفيدة بنشمل confirmed + shipped + delivered
+        const match: Record<string, any> = {
+            status: { $in: ['confirmed', 'shipped', 'delivered'] },
+        };
 
         if (dateFrom || dateTo) {
             match.createdAt = {};
@@ -221,7 +227,6 @@ export class AdminService {
                     as: 'product',
                 },
             },
-            // ─── FIXED: preserveNullAndEmpty → preserveNullAndEmptyArrays
             { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
             {
                 $project: {
@@ -246,7 +251,7 @@ export class AdminService {
         const { limit = 10 } = query;
 
         const data = await this.orderModel.aggregate([
-            { $match: { paymentStatus: 'paid' } },
+            { $match: { status: { $in: ['confirmed', 'shipped', 'delivered'] } } },
             {
                 $group: {
                     _id: '$user',
@@ -269,7 +274,8 @@ export class AdminService {
                 $project: {
                     totalOrders: 1,
                     totalSpent: 1,
-                    userName: '$user.userName',
+                    // ─── FIXED: name بدل userName ──────────────────
+                    name: '$user.name',
                     email: '$user.email',
                 },
             },
@@ -289,7 +295,8 @@ export class AdminService {
         if (role) filter.role = role;
         if (search) {
             filter.$or = [
-                { userName: { $regex: search, $options: 'i' } },
+                // ─── FIXED: name بدل userName ──────────────────────
+                { name: { $regex: search, $options: 'i' } },
                 { email: { $regex: search, $options: 'i' } },
             ];
         }
@@ -297,7 +304,7 @@ export class AdminService {
         const [data, total] = await Promise.all([
             this.userModel
                 .find(filter)
-                .select('-password -otp -otpExpiry -otpAttempts -otpLockedUntil')
+                .select('-password -otp -otpExpires -resetPasswordOtp -resetPasswordOtpExpires -resetPasswordVerified -otpAttempts -otpLockUntil -refreshToken')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
@@ -312,11 +319,11 @@ export class AdminService {
         const user = await this.userModel.findById(userId);
         if (!user) throw new NotFoundException('User not found');
 
-        const isVerified = !(user as any).isVerified;
-        await this.userModel.findByIdAndUpdate(userId, { isVerified });
+        const isActive = !(user as any).isActive;
+        await this.userModel.findByIdAndUpdate(userId, { isActive });
 
         return {
-            message: `User ${isVerified ? 'activated' : 'deactivated'} successfully`,
+            message: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
         };
     }
 
