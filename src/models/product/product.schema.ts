@@ -27,8 +27,6 @@ export class Product {
   @Prop({ type: Number, required: true, min: 0, default: 0 })
   stock: number;
 
-  // ─── CHANGED: كل image بقت object فيها url + publicId ────────────
-  // السبب: محتاجين نحفظ الـ publicId عشان نحذف الصور من Cloudinary
   @Prop({
     type: [
       {
@@ -61,6 +59,11 @@ export class Product {
 
   @Prop({ type: SchemaTypes.ObjectId, ref: 'Brand', required: true })
   brand: Types.ObjectId;
+
+  // ─── ADDED: seller who owns this product ──────────────────────
+  // null = created by Admin directly
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', default: null })
+  seller: Types.ObjectId | null;
 
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
@@ -96,5 +99,8 @@ ProductSchema.index({ name: 'text', description: 'text', tags: 'text' });
 ProductSchema.index({ slug: 1, isDeleted: 1 });
 ProductSchema.index({ category: 1, isDeleted: 1 });
 ProductSchema.index({ brand: 1, isDeleted: 1 });
+// ─── ADDED: seller index for fast lookup ──────────────────────────
+ProductSchema.index({ seller: 1, isDeleted: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ isActive: 1, isDeleted: 1 });
+ProductSchema.index({ sku: 1 }, { unique: true });
