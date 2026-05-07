@@ -13,30 +13,31 @@ import { Admin, AdminSchema } from "../../models/admin/admin.schema";
 import { CustomerRepository } from "../../models/customer/customer.repository";
 import { Customer, CustomerSchema } from "../../models/customer/customer.schema";
 
-@Module({
-    imports: [
-        MongooseModule.forFeature([{
-            name: User.name, 
-            schema: UserSchema,
-            discriminators: [
-                { name: Seller.name, schema: SellerSchema },
-                { name: Admin.name, schema: AdminSchema },
-                { name: Customer.name, schema: CustomerSchema }
-            ]
-        }])
+const mongoFeature = MongooseModule.forFeature([{
+    name: User.name,
+    schema: UserSchema,
+    discriminators: [
+        { name: Seller.name, schema: SellerSchema },
+        { name: Admin.name, schema: AdminSchema },
+        { name: Customer.name, schema: CustomerSchema },
     ],
+}]);
+
+@Module({
+    imports: [mongoFeature],
     controllers: [],
     providers: [
         SellerRepository,
-        AdminRepository, 
-        CustomerRepository, 
-        UserRepository
+        AdminRepository,
+        CustomerRepository,
+        UserRepository,
     ],
     exports: [
+        mongoFeature,
         SellerRepository,
-        AdminRepository, 
-        CustomerRepository, 
-        UserRepository
-    ]
+        AdminRepository,
+        CustomerRepository,
+        UserRepository,
+    ],
 })
-export class UserMongoModule {}
+export class UserMongoModule { }
