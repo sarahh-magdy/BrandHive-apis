@@ -8,7 +8,6 @@ import {
   Min,
 } from 'class-validator';
 
-// ─── FIXED: added export keyword ──────────────────────────────────
 export enum AnalyticsPeriod {
   DAY = 'day',
   WEEK = 'week',
@@ -34,8 +33,9 @@ export class AdminFiltersDto {
   @IsString()
   search?: string;
 
+  // ─── FIXED: lowercase values تتماشى مع الـ DB ─────────────────
   @IsOptional()
-  @IsEnum(['Customer', 'Seller', 'Admin'])
+  @IsEnum(['customer', 'seller', 'admin'])
   role?: string;
 
   @IsOptional()
