@@ -28,9 +28,9 @@ export class CategoryController {
     private readonly categoryFactoryService: CategoryFactoryService,
   ) { }
 
-  // admin Only
+  // Admin Only
   @Post()
-  @Auth(['admin'])
+  @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo'))
   async create(
     @UploadedFile() file: Express.Multer.File,
@@ -50,7 +50,7 @@ export class CategoryController {
 
 
   @Put(':id')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo'))
   async update(
     @Param('id') id: string,
@@ -70,7 +70,7 @@ export class CategoryController {
   }
 
   @Delete(':id')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   async delete(@Param('id') id: string, @User() user: any) {
     await this.categoryService.delete(id, user._id);
     return {
@@ -79,9 +79,9 @@ export class CategoryController {
     };
   }
 
-  // admin + customer
+  // Admin + Customer
   @Get()
-  @Auth(['admin', 'customer'])
+  @Auth(['Admin', 'Customer'])
   async findAll(@Query() query: GetCategoriesDto) {
     const result = await this.categoryService.findAll(query);
     return {
@@ -93,7 +93,7 @@ export class CategoryController {
   }
 
   @Get(':id')
-  @Auth(['admin', 'customer'])
+  @Auth(['Admin', 'Customer'])
   async findOne(@Param('id') id: string) {
     const category = await this.categoryService.findOne(id);
     return {

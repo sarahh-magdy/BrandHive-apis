@@ -19,7 +19,7 @@ import { User } from '@common/decorators/user.decorator';
 
 @Controller('addresses')
 @UseGuards(AuthGuard, RolesGuard)
-@Auth(['customer'])
+@Auth(['Customer'])
 export class AddressController {
   constructor(private readonly addressService: AddressService) { }
 

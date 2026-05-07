@@ -17,7 +17,7 @@ import { User } from '@common/decorators/user.decorator';
 
 @Controller('cart')
 @UseGuards(AuthGuard, RolesGuard)
-@Auth(['customer'])
+@Auth(['Customer'])
 export class CartController {
   constructor(private readonly cartService: CartService) { }
 

@@ -22,19 +22,19 @@ export class CouponController {
   constructor(private readonly couponService: CouponService) { }
 
   // ────────────────────────────────────────────────────────────────
-  // admin Routes
+  // Admin Routes
   // ────────────────────────────────────────────────────────────────
 
   // POST /coupons
   @Post()
-  @Auth(['admin'])
+  @Auth(['Admin'])
   createCoupon(@Body() dto: CreateCouponDto) {
     return this.couponService.createCoupon(dto);
   }
 
   // GET /coupons/admin/all
   @Get('admin/all')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   getAllCoupons(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
@@ -47,32 +47,32 @@ export class CouponController {
 
   // GET /coupons/admin/:id
   @Get('admin/:id')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   getOne(@Param('id') id: string) {
     return this.couponService.getOne(id);
   }
 
   // PUT /coupons/:id
   @Put(':id')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   updateCoupon(@Param('id') id: string, @Body() dto: UpdateCouponDto) {
     return this.couponService.updateCoupon(id, dto);
   }
 
   // DELETE /coupons/:id
   @Delete(':id')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   deleteCoupon(@Param('id') id: string) {
     return this.couponService.deleteCoupon(id);
   }
 
   // ────────────────────────────────────────────────────────────────
-  // customer Routes
+  // Customer Routes
   // ────────────────────────────────────────────────────────────────
 
   // POST /coupons/validate
   @Post('validate')
-  @Auth(['customer'])
+  @Auth(['Customer'])
   validateCoupon(@Body() dto: ValidateCouponDto, @User() user: any) {
     return this.couponService.validateCoupon(dto, user._id);
   }
