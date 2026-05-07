@@ -26,51 +26,51 @@ export class CategoryController {
   constructor(
     private readonly categoryService: CategoryService,
     private readonly categoryFactoryService: CategoryFactoryService,
-  ) {}
+  ) { }
 
-  // Admin Only
-@Post()
-@Auth(['Admin'])
-@UseInterceptors(FileInterceptor('logo'))
-async create(
-  @UploadedFile() file: Express.Multer.File,
-  @Body() createCategoryDto: CreateCategoryDto,
-  @User() user: any,
-) {
-  const category = this.categoryFactoryService.createCategory(createCategoryDto, user);
+  // admin Only
+  @Post()
+  @Auth(['admin'])
+  @UseInterceptors(FileInterceptor('logo'))
+  async create(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() createCategoryDto: CreateCategoryDto,
+    @User() user: any,
+  ) {
+    const category = this.categoryFactoryService.createCategory(createCategoryDto, user);
 
-  const categoryCreated = await this.categoryService.create(category, file);
+    const categoryCreated = await this.categoryService.create(category, file);
 
-  return {
-    success: true,
-    message: 'Category created successfully',
-    data: categoryCreated,
-  };
-}
+    return {
+      success: true,
+      message: 'Category created successfully',
+      data: categoryCreated,
+    };
+  }
 
 
-@Put(':id')
-@Auth(['Admin'])
-@UseInterceptors(FileInterceptor('logo'))
-async update(
-  @Param('id') id: string,
-  @UploadedFile() file: Express.Multer.File,
-  @Body() updateCategoryDto: UpdateCategoryDto,
-  @User() user: any,
-) {
-  const category = await this.categoryFactoryService.updateCategory(id, updateCategoryDto, user);
+  @Put(':id')
+  @Auth(['admin'])
+  @UseInterceptors(FileInterceptor('logo'))
+  async update(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() updateCategoryDto: UpdateCategoryDto,
+    @User() user: any,
+  ) {
+    const category = await this.categoryFactoryService.updateCategory(id, updateCategoryDto, user);
 
-  const updatedCategory = await this.categoryService.update(id, category, file);
+    const updatedCategory = await this.categoryService.update(id, category, file);
 
-  return {
-    success: true,
-    message: 'Category updated successfully',
-    data: updatedCategory,
-  };
-}
+    return {
+      success: true,
+      message: 'Category updated successfully',
+      data: updatedCategory,
+    };
+  }
 
   @Delete(':id')
-  @Auth(['Admin'])
+  @Auth(['admin'])
   async delete(@Param('id') id: string, @User() user: any) {
     await this.categoryService.delete(id, user._id);
     return {
@@ -79,9 +79,9 @@ async update(
     };
   }
 
-  // Admin + Customer
+  // admin + customer
   @Get()
-  @Auth(['Admin', 'Customer'])
+  @Auth(['admin', 'customer'])
   async findAll(@Query() query: GetCategoriesDto) {
     const result = await this.categoryService.findAll(query);
     return {
@@ -93,7 +93,7 @@ async update(
   }
 
   @Get(':id')
-  @Auth(['Admin', 'Customer'])
+  @Auth(['admin', 'customer'])
   async findOne(@Param('id') id: string) {
     const category = await this.categoryService.findOne(id);
     return {

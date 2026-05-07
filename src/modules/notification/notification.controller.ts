@@ -16,9 +16,9 @@ import { User } from '@common/decorators/user.decorator';
 
 @Controller('notifications')
 @UseGuards(AuthGuard, RolesGuard)
-@Auth(['Customer', 'Seller', 'Admin'])
+@Auth(['customer', 'seller', 'admin'])
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(private readonly notificationService: NotificationService) { }
 
   // GET /notifications
   @Get()

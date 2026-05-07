@@ -16,7 +16,7 @@ import { User } from '@common/decorators/user.decorator';
 
 @Controller('inventory')
 @UseGuards(AuthGuard, RolesGuard)
-@Auth(['Admin'])
+@Auth(['admin'])
 export class InventoryController {
     constructor(private readonly inventoryService: InventoryService) { }
 

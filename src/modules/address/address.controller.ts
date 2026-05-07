@@ -19,9 +19,9 @@ import { User } from '@common/decorators/user.decorator';
 
 @Controller('addresses')
 @UseGuards(AuthGuard, RolesGuard)
-@Auth(['Customer'])
+@Auth(['customer'])
 export class AddressController {
-  constructor(private readonly addressService: AddressService) {}
+  constructor(private readonly addressService: AddressService) { }
 
   // GET /addresses
   @Get()

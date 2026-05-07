@@ -17,9 +17,9 @@ import { User } from '@common/decorators/user.decorator';
 
 @Controller('cart')
 @UseGuards(AuthGuard, RolesGuard)
-@Auth(['Customer'])
+@Auth(['customer'])
 export class CartController {
-  constructor(private readonly cartService: CartService) {}
+  constructor(private readonly cartService: CartService) { }
 
   //  GET /cart 
   @Get()

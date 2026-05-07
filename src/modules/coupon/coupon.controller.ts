@@ -19,22 +19,22 @@ import { User } from '@common/decorators/user.decorator';
 @Controller('coupons')
 @UseGuards(AuthGuard, RolesGuard)
 export class CouponController {
-  constructor(private readonly couponService: CouponService) {}
+  constructor(private readonly couponService: CouponService) { }
 
   // ────────────────────────────────────────────────────────────────
-  // Admin Routes
+  // admin Routes
   // ────────────────────────────────────────────────────────────────
 
   // POST /coupons
   @Post()
-  @Auth(['Admin'])
+  @Auth(['admin'])
   createCoupon(@Body() dto: CreateCouponDto) {
     return this.couponService.createCoupon(dto);
   }
 
   // GET /coupons/admin/all
   @Get('admin/all')
-  @Auth(['Admin'])
+  @Auth(['admin'])
   getAllCoupons(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
@@ -47,32 +47,32 @@ export class CouponController {
 
   // GET /coupons/admin/:id
   @Get('admin/:id')
-  @Auth(['Admin'])
+  @Auth(['admin'])
   getOne(@Param('id') id: string) {
     return this.couponService.getOne(id);
   }
 
   // PUT /coupons/:id
   @Put(':id')
-  @Auth(['Admin'])
+  @Auth(['admin'])
   updateCoupon(@Param('id') id: string, @Body() dto: UpdateCouponDto) {
     return this.couponService.updateCoupon(id, dto);
   }
 
   // DELETE /coupons/:id
   @Delete(':id')
-  @Auth(['Admin'])
+  @Auth(['admin'])
   deleteCoupon(@Param('id') id: string) {
     return this.couponService.deleteCoupon(id);
   }
 
   // ────────────────────────────────────────────────────────────────
-  // Customer Routes
+  // customer Routes
   // ────────────────────────────────────────────────────────────────
 
   // POST /coupons/validate
   @Post('validate')
-  @Auth(['Customer'])
+  @Auth(['customer'])
   validateCoupon(@Body() dto: ValidateCouponDto, @User() user: any) {
     return this.couponService.validateCoupon(dto, user._id);
   }
