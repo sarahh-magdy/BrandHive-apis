@@ -22,6 +22,9 @@ export async function generateInvoicePDF(order: any): Promise<string> {
               public_id: `invoice-${order.orderNumber}`,
               resource_type: 'raw',
               format: 'pdf',
+              // ─── FIXED: خلي الـ file public ────────────────────────
+              type: 'upload',
+              access_mode: 'public',
             },
             (error, result) => {
               if (error) return rej(error);
