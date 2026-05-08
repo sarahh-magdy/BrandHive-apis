@@ -361,8 +361,11 @@ export class OrderService {
     const order = await this.orderRepository.findOnePopulated(filter);
     if (!order) throw new NotFoundException('Order not found');
 
-    // ─── FIXED: invoiceUrl دلوقتي Cloudinary URL كامل ──────────
-    if (!(order as any).invoiceUrl) {
+    const existingUrl = (order as any).invoiceUrl;
+
+    const isCloudinaryUrl = existingUrl && existingUrl.startsWith('https://');
+
+    if (!isCloudinaryUrl) {
       const invoiceUrl = await generateInvoicePDF(order);
       await this.orderRepository.updateOne(
         { _id: new Types.ObjectId(orderId) },
@@ -372,8 +375,7 @@ export class OrderService {
       return { data: { invoiceUrl } };
     }
 
-    // ─── FIXED: بيرجع الـ URL كما هو من الـ DB ─────────────────
-    return { data: { invoiceUrl: (order as any).invoiceUrl } };
+    return { data: { invoiceUrl: existingUrl } };
   }
 
   // ════════════════════════════════════════════════════════════════
