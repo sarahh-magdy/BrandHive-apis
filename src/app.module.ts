@@ -24,6 +24,8 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { AdminModule } from '@modules/admin/admin.module';
 import { SearchModule } from '@modules/search/search.module';
 import { InventoryModule } from '@modules/inventory/inventory.module';
+import { ReviewModule } from '@modules/review/review.module';
+import { SellerModule } from '@modules/seller/seller.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -51,7 +53,10 @@ import { InventoryModule } from '@modules/inventory/inventory.module';
     PaymentModule,
     AdminModule,
     SearchModule,
-    InventoryModule
+    InventoryModule,
+    ReviewModule,
+    SellerModule
+
 
   ],
   controllers: [AppController],
