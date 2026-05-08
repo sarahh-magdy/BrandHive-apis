@@ -14,7 +14,6 @@ import { InventoryService } from '../inventory/inventory.service';
 import { PaymentService } from '../payment/payment.service';
 import { OrderFactoryService } from './factory';
 import { sendMail } from '../../common/helpers/send-mail.helper';
-import { generateInvoicePDF } from '../../common/helpers/invoice.helper';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto, CancelOrderDto } from './dto/update-order-status.dto';
 import { GetOrdersDto } from './dto/get-orders.dto';
@@ -130,7 +129,7 @@ export class OrderService {
       );
     }
 
-    // ─── Invoice async ────────────────────────────────────────
+    // ─── Send order email async ───────────────────────────────
     const populated = await this.orderRepository.findOnePopulated({
       _id: (created as any)._id,
     });
@@ -361,21 +360,13 @@ export class OrderService {
     const order = await this.orderRepository.findOnePopulated(filter);
     if (!order) throw new NotFoundException('Order not found');
 
-    const existingUrl = (order as any).invoiceUrl;
-
-    const isCloudinaryUrl = existingUrl && existingUrl.startsWith('https://');
-
-    if (!isCloudinaryUrl) {
-      const invoiceUrl = await generateInvoicePDF(order);
-      await this.orderRepository.updateOne(
-        { _id: new Types.ObjectId(orderId) },
-        { invoiceUrl },
-        { new: true },
-      );
-      return { data: { invoiceUrl } };
-    }
-
-    return { data: { invoiceUrl: existingUrl } };
+    // ─── FIXED: بيرجع order data مباشرة بدل PDF ────────────────
+    return {
+      data: {
+        orderNumber: (order as any).orderNumber,
+        message: 'Invoice details sent to your email',
+      },
+    };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -413,36 +404,63 @@ export class OrderService {
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
   }
 
-  // ─── Private: Invoice ─────────────────────────────────────────
+  // ─── Private: Send Order Email ────────────────────────────────
   private async buildAndSendInvoice(order: any) {
     try {
-      // ─── FIXED: invoiceUrl دلوقتي Cloudinary URL كامل ────────
-      const invoiceUrl = await generateInvoicePDF(order);
-      await this.orderRepository.updateOne(
-        { _id: order._id },
-        { invoiceUrl, invoiceSent: true },
-        { new: true },
-      );
-
       const email = order?.user?.email;
-      if (email) {
-        sendMail({
-          to: email,
-          subject: `Invoice #${order.orderNumber} - Brand Hive`,
-          html: `
-            <div style="font-family:Arial,sans-serif;padding:24px">
-              <h2>Thank you! 🎉</h2>
-              <p>Order: <b>#${order.orderNumber}</b></p>
-              <p>Total: <b>EGP ${order.total?.toFixed(2)}</b></p>
-              <a href="${invoiceUrl}" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:6px;display:inline-block;margin-top:16px">
-                Download Invoice
-              </a>
+      if (!email) return;
+
+      sendMail({
+        to: email,
+        subject: `Order Confirmed #${order.orderNumber} - Brand Hive`,
+        html: `
+          <div style="font-family:Arial,sans-serif;padding:24px;max-width:600px;margin:0 auto">
+            <h2 style="color:#333">Thank you for your order! 🎉</h2>
+            <p>Order Number: <b>#${order.orderNumber}</b></p>
+            <p>Date: <b>${new Date(order.createdAt).toLocaleDateString()}</b></p>
+
+            <h3 style="border-bottom:1px solid #eee;padding-bottom:8px">Items</h3>
+            ${(order.items ?? []).map((item: any) => `
+              <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                <span>${item.productName} × ${item.quantity}</span>
+                <span>EGP ${(item.itemTotal ?? 0).toFixed(2)}</span>
+              </div>
+            `).join('')}
+
+            <div style="border-top:1px solid #eee;margin-top:16px;padding-top:16px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span>Subtotal</span>
+                <span>EGP ${(order.subtotal ?? 0).toFixed(2)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span>Shipping</span>
+                <span>EGP ${(order.shippingFee ?? 0).toFixed(2)}</span>
+              </div>
+              ${(order.discount ?? 0) > 0 ? `
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px;color:#27ae60">
+                <span>Discount</span>
+                <span>-EGP ${(order.discount ?? 0).toFixed(2)}</span>
+              </div>` : ''}
+              <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:16px;margin-top:8px;border-top:1px solid #333;padding-top:8px">
+                <span>Total</span>
+                <span>EGP ${(order.total ?? 0).toFixed(2)}</span>
+              </div>
             </div>
-          `,
-        });
-      }
+
+            <h3 style="border-bottom:1px solid #eee;padding-bottom:8px;margin-top:24px">Shipping Address</h3>
+            <p style="color:#555;margin:4px 0">${order.shippingAddress?.fullName ?? ''}</p>
+            <p style="color:#555;margin:4px 0">${order.shippingAddress?.phone ?? ''}</p>
+            <p style="color:#555;margin:4px 0">${order.shippingAddress?.street ?? ''}, ${order.shippingAddress?.city ?? ''}</p>
+            <p style="color:#555;margin:4px 0">${order.shippingAddress?.governorate ?? ''}, ${order.shippingAddress?.country ?? 'Egypt'}</p>
+
+            <p style="color:#999;font-size:12px;margin-top:32px;text-align:center">
+              Thank you for shopping with Brand Hive!
+            </p>
+          </div>
+        `,
+      });
     } catch (e) {
-      console.error('Invoice error:', e?.message);
+      console.error('Email error:', e?.message);
     }
   }
 }
