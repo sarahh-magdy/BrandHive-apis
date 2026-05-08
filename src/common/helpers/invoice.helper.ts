@@ -1,18 +1,45 @@
 import PDFDocument from 'pdfkit';
-import * as fs from 'fs';
-import * as path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import { Readable } from 'stream';
 
 export async function generateInvoicePDF(order: any): Promise<string> {
-  const dir = path.join(process.cwd(), 'uploads', 'invoices');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-  const fileName = `invoice-${order.orderNumber}.pdf`;
-  const filePath = path.join(dir, fileName);
-
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50 });
-    const stream = fs.createWriteStream(filePath);
-    doc.pipe(stream);
+
+    // ─── Collect PDF chunks in memory ─────────────────────────
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('error', reject);
+    doc.on('end', async () => {
+      try {
+        const pdfBuffer = Buffer.concat(chunks);
+
+        // ─── Upload to Cloudinary ──────────────────────────────
+        const result = await new Promise<any>((res, rej) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              folder: 'invoices',
+              public_id: `invoice-${order.orderNumber}`,
+              resource_type: 'raw',
+              format: 'pdf',
+            },
+            (error, result) => {
+              if (error) return rej(error);
+              res(result);
+            },
+          );
+
+          const readable = new Readable();
+          readable.push(pdfBuffer);
+          readable.push(null);
+          readable.pipe(uploadStream);
+        });
+
+        resolve(result.secure_url);
+      } catch (err) {
+        reject(err);
+      }
+    });
 
     // ─── Header ───────────────────────────────────────────────
     doc.fontSize(24).font('Helvetica-Bold').text('BRAND HIVE', 50, 50);
@@ -63,21 +90,29 @@ export async function generateInvoicePDF(order: any): Promise<string> {
     doc.moveTo(350, y + 5).lineTo(560, y + 5).stroke('#ddd');
     y += 15;
     doc.font('Helvetica').fontSize(10)
-      .text('Subtotal:', 370, y).text(`EGP ${(order.subtotal ?? 0).toFixed(2)}`, 560, y, { align: 'right' }); y += 16;
-    doc.text('Shipping:', 370, y).text(`EGP ${(order.shippingFee ?? 0).toFixed(2)}`, 560, y, { align: 'right' }); y += 16;
+      .text('Subtotal:', 370, y)
+      .text(`EGP ${(order.subtotal ?? 0).toFixed(2)}`, 560, y, { align: 'right' });
+    y += 16;
+    doc.text('Shipping:', 370, y)
+      .text(`EGP ${(order.shippingFee ?? 0).toFixed(2)}`, 560, y, { align: 'right' });
+    y += 16;
     if ((order.discount ?? 0) > 0) {
-      doc.fillColor('#27ae60').text('Discount:', 370, y).text(`-EGP ${order.discount.toFixed(2)}`, 560, y, { align: 'right' }).fillColor('#000'); y += 16;
+      doc.fillColor('#27ae60')
+        .text('Discount:', 370, y)
+        .text(`-EGP ${order.discount.toFixed(2)}`, 560, y, { align: 'right' })
+        .fillColor('#000');
+      y += 16;
     }
-    doc.moveTo(350, y).lineTo(560, y).stroke('#333'); y += 8;
+    doc.moveTo(350, y).lineTo(560, y).stroke('#333');
+    y += 8;
     doc.font('Helvetica-Bold').fontSize(12)
-      .text('TOTAL:', 370, y).text(`EGP ${(order.total ?? 0).toFixed(2)}`, 560, y, { align: 'right' });
+      .text('TOTAL:', 370, y)
+      .text(`EGP ${(order.total ?? 0).toFixed(2)}`, 560, y, { align: 'right' });
 
     // ─── Footer ───────────────────────────────────────────────
     doc.fontSize(9).font('Helvetica').fillColor('#999')
       .text('Thank you for shopping with Brand Hive!', 50, 750, { align: 'center' });
 
     doc.end();
-    stream.on('finish', () => resolve(`invoices/${fileName}`));
-    stream.on('error', reject);
   });
-}
+} 

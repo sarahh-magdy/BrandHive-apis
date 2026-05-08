@@ -361,25 +361,19 @@ export class OrderService {
     const order = await this.orderRepository.findOnePopulated(filter);
     if (!order) throw new NotFoundException('Order not found');
 
+    // ─── FIXED: invoiceUrl دلوقتي Cloudinary URL كامل ──────────
     if (!(order as any).invoiceUrl) {
-      const filePath = await generateInvoicePDF(order);
+      const invoiceUrl = await generateInvoicePDF(order);
       await this.orderRepository.updateOne(
         { _id: new Types.ObjectId(orderId) },
-        { invoiceUrl: filePath },
+        { invoiceUrl },
         { new: true },
       );
-      return {
-        data: {
-          invoiceUrl: `${this.configService.get('APP_URL')}/uploads/${filePath}`,
-        },
-      };
+      return { data: { invoiceUrl } };
     }
 
-    return {
-      data: {
-        invoiceUrl: `${this.configService.get('APP_URL')}/uploads/${(order as any).invoiceUrl}`,
-      },
-    };
+    // ─── FIXED: بيرجع الـ URL كما هو من الـ DB ─────────────────
+    return { data: { invoiceUrl: (order as any).invoiceUrl } };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -420,16 +414,16 @@ export class OrderService {
   // ─── Private: Invoice ─────────────────────────────────────────
   private async buildAndSendInvoice(order: any) {
     try {
-      const invoicePath = await generateInvoicePDF(order);
+      // ─── FIXED: invoiceUrl دلوقتي Cloudinary URL كامل ────────
+      const invoiceUrl = await generateInvoicePDF(order);
       await this.orderRepository.updateOne(
         { _id: order._id },
-        { invoiceUrl: invoicePath, invoiceSent: true },
+        { invoiceUrl, invoiceSent: true },
         { new: true },
       );
 
       const email = order?.user?.email;
       if (email) {
-        const url = `${this.configService.get('APP_URL')}/uploads/${invoicePath}`;
         sendMail({
           to: email,
           subject: `Invoice #${order.orderNumber} - Brand Hive`,
@@ -438,7 +432,7 @@ export class OrderService {
               <h2>Thank you! 🎉</h2>
               <p>Order: <b>#${order.orderNumber}</b></p>
               <p>Total: <b>EGP ${order.total?.toFixed(2)}</b></p>
-              <a href="${url}" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:6px;display:inline-block;margin-top:16px">
+              <a href="${invoiceUrl}" style="padding:12px 24px;background:#333;color:#fff;text-decoration:none;border-radius:6px;display:inline-block;margin-top:16px">
                 Download Invoice
               </a>
             </div>
