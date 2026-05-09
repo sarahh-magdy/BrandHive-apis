@@ -29,10 +29,10 @@ import { multerMemoryConfig } from '../../config/cloudinary/multer-memory.config
 export class BrandController {
   constructor(private readonly brandService: BrandService) { }
 
-  // ─── admin Only ────────────────────────────────────────────────
+  // ─── Admin Only ────────────────────────────────────────────────
 
   @Post()
-  @Auth(['admin'])
+  @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
   async createBrand(
     @Body() dto: CreateBrandDto,
@@ -44,7 +44,7 @@ export class BrandController {
   }
 
   @Put(':id')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
   async updateBrand(
     @Param('id') id: string,
@@ -57,28 +57,28 @@ export class BrandController {
   }
 
   @Delete(':id')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   async deleteBrand(@Param('id') id: string, @User() user: any) {
     await this.brandService.deleteBrand(id, user);
     return { success: true, message: 'Brand deleted successfully' };
   }
 
   @Patch(':id/activate')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   async activateBrand(@Param('id') id: string, @User() user: any) {
     const data = await this.brandService.activateBrand(id, user);
     return { success: true, message: 'Brand activated successfully', data };
   }
 
   @Patch(':id/deactivate')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   async deactivateBrand(@Param('id') id: string, @User() user: any) {
     const data = await this.brandService.deactivateBrand(id, user);
     return { success: true, message: 'Brand deactivated successfully', data };
   }
 
   @Get('requests')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   async findAllRequests(@Query() query: GetBrandsDto) {
     const result = await this.brandService.findAllRequests(query);
     return {
@@ -90,7 +90,7 @@ export class BrandController {
   }
 
   @Patch('requests/:requestId/approve')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   async approveBrand(
     @Param('requestId') requestId: string,
     @User() user: any,
@@ -104,7 +104,7 @@ export class BrandController {
   }
 
   @Patch('requests/:requestId/reject')
-  @Auth(['admin'])
+  @Auth(['Admin'])
   async rejectBrand(
     @Param('requestId') requestId: string,
     @Body() dto: RejectBrandDto,
@@ -121,7 +121,7 @@ export class BrandController {
   // ─── Static routes (must come before :id) ─────────────────────
 
   @Get('by-category/:categoryId')
-  @Auth(['admin', 'customer', 'seller'])
+  @Auth(['Admin', 'Customer', 'Seller'])
   async findByCategory(
     @Param('categoryId') categoryId: string,
     @Query() query: GetBrandsDto,
@@ -135,10 +135,10 @@ export class BrandController {
     };
   }
 
-  // ─── admin + customer + seller ─────────────────────────────────
+  // ─── Admin + Customer + Seller ─────────────────────────────────
 
   @Get()
-  @Auth(['admin', 'customer', 'seller'])
+  @Auth(['Admin', 'Customer', 'Seller'])
   async findAll(@Query() query: GetBrandsDto) {
     const result = await this.brandService.findAll(query);
     return {
@@ -150,16 +150,16 @@ export class BrandController {
   }
 
   @Get(':id')
-  @Auth(['admin', 'customer', 'seller'])
+  @Auth(['Admin', 'Customer', 'Seller'])
   async findOne(@Param('id') id: string) {
     const data = await this.brandService.findOne(id);
     return { success: true, message: 'Brand fetched successfully', data };
   }
 
-  // ─── seller + customer ─────────────────────────────────────────
+  // ─── Seller + Customer ─────────────────────────────────────────
 
   @Post('request')
-  @Auth(['seller', 'customer'])
+  @Auth(['Seller', 'Customer'])
   @UseInterceptors(FileInterceptor('logo', multerMemoryConfig))
   async requestBrand(
     @Body() dto: RequestBrandDto,

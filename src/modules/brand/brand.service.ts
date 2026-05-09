@@ -28,8 +28,8 @@ export class BrandService {
     private readonly brandFactoryService: BrandFactoryService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly authService: AuthService,
+    // ─── ADDED ────────────────────────────────────────────────────
     private readonly userRepository: UserRepository,
-
   ) { }
 
   // ─── Create Brand ──────────────────────────────────────────────
@@ -188,10 +188,8 @@ export class BrandService {
     const brand = this.brandFactoryService.buildBrandFromRequest(request as any, user);
     const createdBrand = await this.brandRepository.create({ ...brand } as any);
 
-    const populatedRequest = await this.brandRequestRepository
-      .getOne({ _id: new Types.ObjectId(requestId) });
-
-    const requestedById = (populatedRequest as any)?.requestedBy;
+    // ─── FIXED: جيب الـ user بيانات من الـ requestedBy ID ─────────
+    const requestedById = (request as any)?.requestedBy;
 
     if (requestedById) {
       const requester = await this.userRepository.findById(requestedById.toString());
@@ -200,7 +198,7 @@ export class BrandService {
         await this.authService.createSellerFromRequest({
           name: (requester as any).name || 'Seller',
           email: (requester as any).email,
-          whatsappLink: (populatedRequest as any)?.whatsappLink || '',
+          whatsappLink: (request as any)?.whatsappLink || '',
         });
       }
     }
