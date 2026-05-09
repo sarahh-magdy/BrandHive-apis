@@ -26,14 +26,8 @@ export class ProductService {
     private readonly cloudinaryService: CloudinaryService,
   ) { }
 
-  // ─────────────────────────────────────────────────────────────
-  // CREATE PRODUCT  
-  // ─────────────────────────────────────────────────────────────
-  async createProduct(
-    dto: CreateProductDto,
-    user: any,
-    files: Express.Multer.File[],
-  ) {
+  // ─── Create ───────────────────────────────────────────────────
+  async createProduct(dto: CreateProductDto, user: any, files: Express.Multer.File[]) {
     const category = await this.categoryRepository.getOne({
       _id: new Types.ObjectId(dto.category),
       isDeleted: false,
@@ -47,9 +41,7 @@ export class ProductService {
     if (!brand) throw new NotFoundException('Brand not found');
 
     const product = await this.productFactoryService.createProduct(dto, user, files);
-
     await this.checkSlugConflict(product.slug);
-
     const created = await this.productRepository.create({ ...product } as any);
 
     await this.brandService.updateBrandStats(dto.brand, {
@@ -59,9 +51,7 @@ export class ProductService {
     return this.productFactoryService.mapProduct(created);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // FIND ALL
-  // ─────────────────────────────────────────────────────────────
+  // ─── Find All ─────────────────────────────────────────────────
   async findAll(query: GetProductsDto) {
     const {
       page = 1, limit = 10, search,
@@ -104,38 +94,24 @@ export class ProductService {
       this.productRepository.countDocuments(filter),
     ]);
 
-    const data = products.map((p) =>
-      this.productFactoryService.mapProduct(p),
-    );
-
     return {
-      data,
+      data: products.map((p) => this.productFactoryService.mapProduct(p)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // FIND ONE
-  // ─────────────────────────────────────────────────────────────
+  // ─── Find One ─────────────────────────────────────────────────
   async findOne(id: string) {
     const product = await this.productRepository.findOnePopulated({
       _id: new Types.ObjectId(id),
       isDeleted: false,
     });
     if (!product) throw new NotFoundException('Product not found');
-
     return this.productFactoryService.mapProduct(product);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // UPDATE PRODUCT
-  // ─────────────────────────────────────────────────────────────
-  async updateProduct(
-    id: string,
-    dto: UpdateProductDto,
-    user: any,
-    files: Express.Multer.File[],
-  ) {
+  // ─── Update ───────────────────────────────────────────────────
+  async updateProduct(id: string, dto: UpdateProductDto, user: any, files: Express.Multer.File[]) {
     if (dto.category) {
       const category = await this.categoryRepository.getOne({
         _id: new Types.ObjectId(dto.category),
@@ -152,16 +128,8 @@ export class ProductService {
       if (!brand) throw new NotFoundException('Brand not found');
     }
 
-    const updates = await this.productFactoryService.updateProduct(
-      id,
-      dto,
-      user,
-      files,
-    );
-
-    if (updates.slug) {
-      await this.checkSlugConflict(updates.slug, id);
-    }
+    const updates = await this.productFactoryService.updateProduct(id, dto, user, files);
+    if (updates.slug) await this.checkSlugConflict(updates.slug, id);
 
     const updated = await this.productRepository.updateOne(
       { _id: new Types.ObjectId(id), isDeleted: false },
@@ -169,13 +137,10 @@ export class ProductService {
       { new: true },
     );
     if (!updated) throw new NotFoundException('Product not found');
-
     return this.productFactoryService.mapProduct(updated);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // DELETE PRODUCT
-  // ─────────────────────────────────────────────────────────────
+  // ─── Delete ───────────────────────────────────────────────────
   async deleteProduct(id: string, user: any) {
     const product = await this.productRepository.getOne({
       _id: new Types.ObjectId(id),
@@ -183,12 +148,11 @@ export class ProductService {
     });
     if (!product) throw new NotFoundException('Product not found');
 
-    const images = (product as any).images ?? [];
-    const publicIds = images.map((img: any) => img.publicId).filter(Boolean);
+    const publicIds = ((product as any).images ?? [])
+      .map((img: any) => img.publicId)
+      .filter(Boolean);
 
-    if (publicIds.length) {
-      await this.cloudinaryService.deleteImages(publicIds);
-    }
+    if (publicIds.length) await this.cloudinaryService.deleteImages(publicIds);
 
     await this.productRepository.updateOne(
       { _id: new Types.ObjectId(id) },
@@ -197,9 +161,7 @@ export class ProductService {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ACTIVATE / DEACTIVATE
-  // ─────────────────────────────────────────────────────────────
+  // ─── Activate / Deactivate ────────────────────────────────────
   async activateProduct(id: string, user: any) {
     const updated = await this.productRepository.updateOne(
       { _id: new Types.ObjectId(id) },
@@ -218,13 +180,8 @@ export class ProductService {
     return this.productFactoryService.mapProduct(updated);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // UPDATE PRODUCT STATS
-  // ─────────────────────────────────────────────────────────────
-  async updateProductStats(
-    productId: string,
-    stats: { averageRating?: number; totalReviews?: number },
-  ) {
+  // ─── Stats ────────────────────────────────────────────────────
+  async updateProductStats(productId: string, stats: { averageRating?: number; totalReviews?: number }) {
     return this.productRepository.updateOne(
       { _id: new Types.ObjectId(productId) },
       {
@@ -235,9 +192,6 @@ export class ProductService {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ⭐ ADDED: FIND BY ID (FOR REVIEW SERVICE)
-  // ─────────────────────────────────────────────────────────────
   async findById(productId: string) {
     return this.productRepository.findOnePopulated({
       _id: new Types.ObjectId(productId),
@@ -245,31 +199,42 @@ export class ProductService {
     });
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ⭐ ADDED: UPDATE RATING (FOR REVIEW SERVICE)
-  // ─────────────────────────────────────────────────────────────
-  async updateRating(
-    productId: string,
-    averageRating: number,
-    totalReviews: number,
-  ) {
+  async updateRating(productId: string, averageRating: number, totalReviews: number) {
     return this.productRepository.updateOne(
       { _id: new Types.ObjectId(productId) },
-      {
-        'stats.averageRating': averageRating,
-        'stats.totalReviews': totalReviews,
-      },
+      { 'stats.averageRating': averageRating, 'stats.totalReviews': totalReviews },
       { new: true },
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // PRIVATE
-  // ─────────────────────────────────────────────────────────────
+  // ─── Home page feeds ──────────────────────────────────────────
+
+  async getNewArrivals(limit = 20) {
+    const products = await this.productRepository.getNewArrivals(14, limit);
+    return { data: products.map((p) => this.productFactoryService.mapProduct(p)) };
+  }
+
+  async getTopRated(limit = 20) {
+    const products = await this.productRepository.getTopRated(limit);
+    return { data: products.map((p) => this.productFactoryService.mapProduct(p)) };
+  }
+
+  async getTrending(limit = 20) {
+    const products = await this.productRepository.getTrending(limit);
+    return { data: products.map((p) => this.productFactoryService.mapProduct(p)) };
+  }
+
+  // ─── Track view (silent — never throws) ──────────────────────
+  async trackView(productId: string) {
+    try {
+      await this.productRepository.incrementViewCount(productId);
+    } catch { /* silent */ }
+  }
+
+  // ─── Private ──────────────────────────────────────────────────
   private async checkSlugConflict(slug: string, excludeId?: string) {
     const filter: Record<string, any> = { slug, isDeleted: false };
     if (excludeId) filter._id = { $ne: new Types.ObjectId(excludeId) };
-
     const exists = await this.productRepository.getOne(filter);
     if (exists) throw new ConflictException('Product name already exists');
   }

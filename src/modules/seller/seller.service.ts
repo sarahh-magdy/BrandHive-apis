@@ -15,6 +15,7 @@ import { BazaarRepository } from '../../models/bazaar/bazaar.repository';
 import { InventoryService } from '../inventory/inventory.service';
 import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
 import { ProductFactoryService } from '../product/factory';
+import { NotificationService } from '../notification/notification.service';
 
 import {
     SellerCreateProductDto,
@@ -37,6 +38,7 @@ export class SellerService {
         private readonly inventoryService: InventoryService,
         private readonly cloudinaryService: CloudinaryService,
         private readonly productFactory: ProductFactoryService,
+        private readonly notificationService: NotificationService,
     ) { }
 
     // ════════════════════════════════════════════════════════════════
@@ -45,10 +47,8 @@ export class SellerService {
     async getDashboard(sellerId: string) {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
-
         const sellerObjId = new Types.ObjectId(sellerId);
 
-        // ─── Get seller's product IDs ─────────────────────────────
         const sellerProducts = await this.productRepository.getAll(
             { seller: sellerObjId, isDeleted: false },
             undefined,
@@ -68,29 +68,23 @@ export class SellerService {
             pendingOrders,
             totalReviews,
             avgRatingResult,
+            engagementResult,
         ] = await Promise.all([
-            // Products
             this.productRepository.countDocuments({ seller: sellerObjId, isDeleted: false }),
             this.productRepository.countDocuments({ seller: sellerObjId, isDeleted: false, isActive: true }),
             this.productRepository.countDocuments({ seller: sellerObjId, isDeleted: false, stock: { $gt: 0, $lte: 5 } }),
             this.productRepository.countDocuments({ seller: sellerObjId, isDeleted: false, stock: 0 }),
-
-            // Orders containing seller products
             this.orderRepository.countDocuments({ 'items.product': { $in: productIds } }),
             this.orderRepository.countDocuments({
                 'items.product': { $in: productIds },
                 createdAt: { $gte: todayStart },
             }),
-
-            // Revenue
             this.orderRepository['orderModel']?.aggregate([
                 { $match: { 'items.product': { $in: productIds }, paymentStatus: 'paid' } },
                 { $unwind: '$items' },
                 { $match: { 'items.product': { $in: productIds } } },
                 { $group: { _id: null, total: { $sum: '$items.itemTotal' } } },
             ]) ?? [],
-
-            // Revenue today
             this.orderRepository['orderModel']?.aggregate([
                 {
                     $match: {
@@ -103,20 +97,26 @@ export class SellerService {
                 { $match: { 'items.product': { $in: productIds } } },
                 { $group: { _id: null, total: { $sum: '$items.itemTotal' } } },
             ]) ?? [],
-
-            // Pending
             this.orderRepository.countDocuments({
                 'items.product': { $in: productIds },
                 status: 'pending',
             }),
-
-            // Reviews
             this.reviewRepository.countDocuments({ product: { $in: productIds } }),
-
-            // Avg rating
             this.reviewRepository['reviewModel']?.aggregate([
                 { $match: { product: { $in: productIds }, isVisible: true } },
                 { $group: { _id: null, avg: { $avg: '$rating' } } },
+            ]) ?? [],
+            // ─── ADDED: engagement stats ───────────────────────────
+            this.productRepository['productModel']?.aggregate([
+                { $match: { seller: sellerObjId, isDeleted: false } },
+                {
+                    $group: {
+                        _id: null,
+                        totalViews: { $sum: '$viewCount' },
+                        totalCartAdds: { $sum: '$cartCount' },
+                        totalWishlists: { $sum: '$wishlistCount' },
+                    },
+                },
             ]) ?? [],
         ]);
 
@@ -141,12 +141,18 @@ export class SellerService {
                     total: totalReviews,
                     averageRating: Math.round((avgRatingResult[0]?.avg ?? 0) * 10) / 10,
                 },
+                // ─── ADDED ─────────────────────────────────────────
+                engagement: {
+                    totalViews: engagementResult[0]?.totalViews ?? 0,
+                    totalCartAdds: engagementResult[0]?.totalCartAdds ?? 0,
+                    totalWishlists: engagementResult[0]?.totalWishlists ?? 0,
+                },
             },
         };
     }
 
     // ════════════════════════════════════════════════════════════════
-    // PRODUCTS — Seller Isolation
+    // PRODUCTS
     // ════════════════════════════════════════════════════════════════
     async getMyProducts(sellerId: string, query: GetSellerProductsDto) {
         const { page = 1, limit = 10, search, category, isActive, lowStock } = query;
@@ -188,24 +194,15 @@ export class SellerService {
         return { data: this.productFactory.mapProduct(product) };
     }
 
-    async createProduct(
-        sellerId: string,
-        dto: SellerCreateProductDto,
-        files: Express.Multer.File[],
-    ) {
+    async createProduct(sellerId: string, dto: SellerCreateProductDto, files: Express.Multer.File[]) {
         if (dto.discountPrice !== undefined && dto.discountPrice >= dto.price) {
             throw new BadRequestException('Discount price must be less than original price');
         }
 
-        // ─── Upload images ────────────────────────────────────────
-        const uploadedImages = await this.cloudinaryService.uploadImages(
-            files, 'products/images',
-        );
-
+        const uploadedImages = await this.cloudinaryService.uploadImages(files, 'products/images');
         const sku = `${dto.name.slice(0, 3).toUpperCase().replace(/\s/g, '')}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
         const slug = slugify(dto.name, { lower: true, trim: true, replacement: '-' });
 
-        // ─── Check slug conflict ──────────────────────────────────
         const existing = await this.productRepository.getOne({ slug, isDeleted: false });
         if (existing) throw new ConflictException('Product name already exists');
 
@@ -223,25 +220,21 @@ export class SellerService {
             dimensions: dto.dimensions ?? null,
             category: new Types.ObjectId(dto.category),
             brand: new Types.ObjectId(dto.brand),
-            // ─── SELLER OWNERSHIP ──────────────────────────────────
             seller: new Types.ObjectId(sellerId),
             isActive: true,
             isDeleted: false,
             createdBy: new Types.ObjectId(sellerId),
             updatedBy: new Types.ObjectId(sellerId),
             stats: { averageRating: 0, totalReviews: 0 },
+            viewCount: 0,
+            cartCount: 0,
+            wishlistCount: 0,
         } as any);
 
         return { message: 'Product created successfully', data: product };
     }
 
-    async updateProduct(
-        sellerId: string,
-        productId: string,
-        dto: SellerUpdateProductDto,
-        files?: Express.Multer.File[],
-    ) {
-        // ─── Ownership check ──────────────────────────────────────
+    async updateProduct(sellerId: string, productId: string, dto: SellerUpdateProductDto, files?: Express.Multer.File[]) {
         const product = await this.productRepository.getOne({
             _id: new Types.ObjectId(productId),
             seller: new Types.ObjectId(sellerId),
@@ -261,8 +254,7 @@ export class SellerService {
         if (dto.name) {
             const slug = slugify(dto.name, { lower: true, trim: true, replacement: '-' });
             const conflict = await this.productRepository.getOne({
-                slug,
-                isDeleted: false,
+                slug, isDeleted: false,
                 _id: { $ne: new Types.ObjectId(productId) },
             });
             if (conflict) throw new ConflictException('Product name already exists');
@@ -281,9 +273,7 @@ export class SellerService {
         if (dto.brand !== undefined) updates.brand = new Types.ObjectId(dto.brand);
 
         if (files?.length) {
-            const oldPublicIds = ((product as any).images ?? [])
-                .map((img: any) => img.publicId)
-                .filter(Boolean);
+            const oldPublicIds = ((product as any).images ?? []).map((img: any) => img.publicId).filter(Boolean);
             if (oldPublicIds.length) await this.cloudinaryService.deleteImages(oldPublicIds);
             updates.images = await this.cloudinaryService.uploadImages(files, 'products/images');
         }
@@ -305,10 +295,7 @@ export class SellerService {
         });
         if (!product) throw new ForbiddenException('Product not found or not yours');
 
-        // ─── Delete images from Cloudinary ────────────────────────
-        const publicIds = ((product as any).images ?? [])
-            .map((img: any) => img.publicId)
-            .filter(Boolean);
+        const publicIds = ((product as any).images ?? []).map((img: any) => img.publicId).filter(Boolean);
         if (publicIds.length) await this.cloudinaryService.deleteImages(publicIds);
 
         await this.productRepository.updateOne(
@@ -321,15 +308,9 @@ export class SellerService {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // INVENTORY — Seller manages only HIS products
+    // INVENTORY
     // ════════════════════════════════════════════════════════════════
-    async adjustStock(
-        sellerId: string,
-        productId: string,
-        change: number,
-        note?: string,
-    ) {
-        // ─── Ownership check ──────────────────────────────────────
+    async adjustStock(sellerId: string, productId: string, change: number, note?: string) {
         const product = await this.productRepository.getOne({
             _id: new Types.ObjectId(productId),
             seller: new Types.ObjectId(sellerId),
@@ -349,14 +330,11 @@ export class SellerService {
     }
 
     async getStockAlerts(sellerId: string) {
-        const sellerObjId = new Types.ObjectId(sellerId);
-
         const [lowStock, outOfStock] = await Promise.all([
             this.productRepository.getLowStockProducts(5),
             this.productRepository.getOutOfStockProducts({ skip: 0, limit: 50 }),
         ]);
 
-        // ─── Filter only seller's products ────────────────────────
         const filterBySeller = (products: any[]) =>
             products.filter((p) => p.seller?.toString() === sellerId);
 
@@ -369,22 +347,18 @@ export class SellerService {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // ORDERS — Seller sees orders with HIS products
+    // ORDERS
     // ════════════════════════════════════════════════════════════════
     async getMyOrders(sellerId: string, query: GetSellerOrdersDto) {
         const { page = 1, limit = 10, status, dateFrom, dateTo } = query;
         const skip = (page - 1) * limit;
 
-        // ─── Get seller product IDs ───────────────────────────────
         const sellerProducts = await this.productRepository.getAll(
             { seller: new Types.ObjectId(sellerId), isDeleted: false },
         );
         const productIds = sellerProducts.map((p: any) => p._id);
 
-        const filter: Record<string, any> = {
-            'items.product': { $in: productIds },
-        };
-
+        const filter: Record<string, any> = { 'items.product': { $in: productIds } };
         if (status) filter.status = status;
         if (dateFrom || dateTo) {
             filter.createdAt = {};
@@ -397,7 +371,6 @@ export class SellerService {
             this.orderRepository.countDocuments(filter),
         ]);
 
-        // ─── Filter order items to show ONLY seller's products ────
         const filteredOrders = orders.map((order: any) => ({
             ...order,
             items: order.items.filter((item: any) =>
@@ -405,10 +378,7 @@ export class SellerService {
             ),
         }));
 
-        return {
-            data: filteredOrders,
-            meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-        };
+        return { data: filteredOrders, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
     }
 
     async getMyOrderDetails(sellerId: string, orderId: string) {
@@ -421,10 +391,8 @@ export class SellerService {
             _id: new Types.ObjectId(orderId),
             'items.product': { $in: productIds },
         });
-
         if (!order) throw new NotFoundException('Order not found');
 
-        // ─── Show only seller's items ─────────────────────────────
         const filtered = {
             ...(order as any),
             items: (order as any).items.filter((item: any) =>
@@ -455,7 +423,6 @@ export class SellerService {
         const orderModel = (this.orderRepository as any)['orderModel'];
 
         const [salesTimeline, topProducts, ordersByStatus] = await Promise.all([
-            // Sales per day
             orderModel.aggregate([
                 {
                     $match: {
@@ -476,8 +443,6 @@ export class SellerService {
                 { $sort: { _id: 1 } },
                 { $project: { _id: 0, date: '$_id', revenue: 1, orders: 1 } },
             ]),
-
-            // Top products
             orderModel.aggregate([
                 {
                     $match: {
@@ -498,8 +463,6 @@ export class SellerService {
                 { $sort: { totalSold: -1 } },
                 { $limit: 5 },
             ]),
-
-            // Orders by status
             orderModel.aggregate([
                 { $match: { 'items.product': { $in: productIds } } },
                 { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -519,16 +482,14 @@ export class SellerService {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // REVIEWS — seller sees reviews on his products
+    // REVIEWS
     // ════════════════════════════════════════════════════════════════
     async getMyReviews(sellerId: string, page = 1, limit = 10) {
         const skip = (page - 1) * limit;
-
         const sellerProducts = await this.productRepository.getAll(
             { seller: new Types.ObjectId(sellerId), isDeleted: false },
         );
         const productIds = sellerProducts.map((p: any) => p._id);
-
         const filter = { product: { $in: productIds }, isVisible: true };
 
         const [data, total] = await Promise.all([
@@ -540,14 +501,13 @@ export class SellerService {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // BAZAAR — seller store page
+    // BAZAAR
     // ════════════════════════════════════════════════════════════════
     async getMyBazaar(sellerId: string) {
         let bazaar = await this.bazaarRepository.getOne({
             seller: new Types.ObjectId(sellerId),
         });
 
-        // ─── Auto-create bazaar on first access ───────────────────
         if (!bazaar) {
             bazaar = await this.bazaarRepository.create({
                 seller: new Types.ObjectId(sellerId),
@@ -592,12 +552,9 @@ export class SellerService {
         }
 
         if (dto.featuredCategories) {
-            updates.featuredCategories = dto.featuredCategories.map(
-                (id) => new Types.ObjectId(id),
-            );
+            updates.featuredCategories = dto.featuredCategories.map((id) => new Types.ObjectId(id));
         }
 
-        // ─── Upload logo ──────────────────────────────────────────
         if (logoFile) {
             if ((bazaar as any).logo?.publicId) {
                 await this.cloudinaryService.deleteImage((bazaar as any).logo.publicId);
@@ -606,7 +563,6 @@ export class SellerService {
             updates.logo = { url: uploaded.url, publicId: uploaded.publicId };
         }
 
-        // ─── Upload banner ────────────────────────────────────────
         if (bannerFile) {
             if ((bazaar as any).banner?.publicId) {
                 await this.cloudinaryService.deleteImage((bazaar as any).banner.publicId);
@@ -622,6 +578,25 @@ export class SellerService {
         );
 
         return { message: 'Bazaar updated successfully', data: updated };
+    }
+
+    // ─── Admin: toggle bazaar status ──────────────────────────────
+    async toggleBazaarStatus(sellerId: string) {
+        const bazaar = await this.bazaarRepository.getOne({
+            seller: new Types.ObjectId(sellerId),
+        });
+        if (!bazaar) throw new NotFoundException('Bazaar not found');
+
+        const updated = await this.bazaarRepository.updateOne(
+            { seller: new Types.ObjectId(sellerId) },
+            { isActive: !(bazaar as any).isActive },
+            { new: true },
+        );
+
+        return {
+            message: `Bazaar ${(updated as any).isActive ? 'activated' : 'deactivated'} successfully`,
+            data: updated,
+        };
     }
 
     // ─── Public: Get bazaar by slug ───────────────────────────────
@@ -663,5 +638,41 @@ export class SellerService {
         ]);
 
         return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    }
+
+    // ─── Admin: Get all bazaars ───────────────────────────────────
+    async getAllBazaarsAdmin(search: string, page = 1, limit = 10) {
+        const skip = (page - 1) * limit;
+        // ─── Admin يشوف كل الـ bazaars حتى لو isActive = false ──
+        const filter: Record<string, any> = {};
+
+        if (search) {
+            filter.$or = [
+                { storeName: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+            ];
+        }
+
+        const [data, total] = await Promise.all([
+            this.bazaarRepository.findAllBazaars(filter, { skip, limit }),
+            this.bazaarRepository.countDocuments(filter),
+        ]);
+
+        return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
+    }
+
+    // ─── Send notification to all bazaar followers ────────────────
+    async notifyBazaarFollowers(sellerId: string, title: string, body: string) {
+        // placeholder — لو عندك follow system هتجيب الـ followers هنا
+        // دلوقتي بنبعت للـ seller نفسه
+        await this.notificationService.create({
+            user: sellerId,
+            type: 'bazaar_update',
+            title,
+            body,
+            data: { sellerId },
+        });
+
+        return { message: 'Notification sent' };
     }
 }

@@ -21,6 +21,7 @@ import { multerMemoryConfig } from '../../config/cloudinary/multer-memory.config
 import { Auth } from '@common/decorators';
 import { AuthGuard } from '@common/guards';
 import { User } from '@common/decorators/user.decorator';
+import { Public } from '@common/decorators/public.decorator';
 
 @Controller('product')
 @UseGuards(AuthGuard)
@@ -77,6 +78,26 @@ export class ProductController {
     return { success: true, message: 'Product deactivated successfully', data };
   }
 
+  // ─── Public feeds (must come before :id) ──────────────────────
+
+  @Get('new-arrivals')
+  @Public()
+  async getNewArrivals(@Query('limit') limit = 20) {
+    return this.productService.getNewArrivals(+limit);
+  }
+
+  @Get('top-rated')
+  @Public()
+  async getTopRated(@Query('limit') limit = 20) {
+    return this.productService.getTopRated(+limit);
+  }
+
+  @Get('trending')
+  @Public()
+  async getTrending(@Query('limit') limit = 20) {
+    return this.productService.getTrending(+limit);
+  }
+
   // ─── Static routes (must come before :id) ─────────────────────
 
   @Get('by-category/:categoryId')
@@ -126,6 +147,8 @@ export class ProductController {
   @Get(':id')
   @Auth(['Admin', 'Seller', 'Customer'])
   async findOne(@Param('id') id: string) {
+    // ─── Track view silently ──────────────────────────────────
+    this.productService.trackView(id).catch(() => null);
     const data = await this.productService.findOne(id);
     return { success: true, message: 'Product fetched successfully', data };
   }

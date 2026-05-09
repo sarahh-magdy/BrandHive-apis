@@ -13,6 +13,9 @@ export class Product {
   images: { url: string; publicId: string }[];
   tags: string[];
   weight: number | null;
+  viewCount: number;
+  cartCount: number;
+  wishlistCount: number;
   dimensions: { length: number; width: number; height: number } | null;
   category: Types.ObjectId;
   brand: Types.ObjectId;
@@ -33,6 +36,9 @@ export interface MappedProduct {
   description?: string | null;
   price: number;
   discountPrice?: number | null;
+  viewCount?: number;
+  cartCount?: number;
+  wishlistCount?: number;
   finalPrice: number;
   isOnSale: boolean;
   discountPercentage: number;

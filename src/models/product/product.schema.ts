@@ -60,11 +60,6 @@ export class Product {
   @Prop({ type: SchemaTypes.ObjectId, ref: 'Brand', required: true })
   brand: Types.ObjectId;
 
-  // ─── ADDED: seller who owns this product ──────────────────────
-  // null = created by Admin directly
-  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', default: null })
-  seller: Types.ObjectId | null;
-
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
 
@@ -91,6 +86,16 @@ export class Product {
     default: () => ({ averageRating: 0, totalReviews: 0 }),
   })
   stats: { averageRating: number; totalReviews: number };
+
+  // ─── ADDED: engagement stats ───────────────────────────────────
+  @Prop({ type: Number, default: 0 })
+  viewCount: number;
+
+  @Prop({ type: Number, default: 0 })
+  cartCount: number;
+
+  @Prop({ type: Number, default: 0 })
+  wishlistCount: number;
 }
 
 export const ProductSchema = SchemaFactory.createForClass(Product);
@@ -99,8 +104,8 @@ ProductSchema.index({ name: 'text', description: 'text', tags: 'text' });
 ProductSchema.index({ slug: 1, isDeleted: 1 });
 ProductSchema.index({ category: 1, isDeleted: 1 });
 ProductSchema.index({ brand: 1, isDeleted: 1 });
-// ─── ADDED: seller index for fast lookup ──────────────────────────
-ProductSchema.index({ seller: 1, isDeleted: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ isActive: 1, isDeleted: 1 });
-ProductSchema.index({ sku: 1 }, { unique: true });
+ProductSchema.index({ viewCount: -1 });
+ProductSchema.index({ createdAt: -1, isActive: 1, isDeleted: 1 });
+ProductSchema.index({ 'stats.averageRating': -1 });

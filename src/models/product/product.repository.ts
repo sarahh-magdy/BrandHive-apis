@@ -12,7 +12,7 @@ export class ProductRepository extends AbstractRepository<Product> {
     super(productModel);
   }
 
-  // ─── Base paginated fetch ──────────────────────────────────────
+  // ─── Base populated fetch ──────────────────────────────────────
   async findWithPagination(
     filter: QueryFilter<Product>,
     options: { skip: number; limit: number; sort?: Record<string, any> },
@@ -21,7 +21,6 @@ export class ProductRepository extends AbstractRepository<Product> {
       .find(filter)
       .populate('category', 'name slug')
       .populate('brand', 'name slug logo')
-      .populate('seller', 'userName email')
       .sort(options.sort ?? { createdAt: -1 })
       .skip(options.skip)
       .limit(options.limit)
@@ -34,7 +33,6 @@ export class ProductRepository extends AbstractRepository<Product> {
       .findOne(filter)
       .populate('category', 'name slug')
       .populate('brand', 'name slug logo')
-      .populate('seller', 'userName email')
       .lean()
       .exec();
   }
@@ -48,7 +46,6 @@ export class ProductRepository extends AbstractRepository<Product> {
       .find(filter)
       .populate('category', 'name slug')
       .populate('brand', 'name slug logo')
-      .populate('seller', 'userName email')
       .sort(options.sort)
       .skip(options.skip)
       .limit(options.limit)
@@ -56,7 +53,6 @@ export class ProductRepository extends AbstractRepository<Product> {
       .exec();
   }
 
-  // ─── ADDED: getAll used by SellerService ──────────────────────
   async getAll(
     filter: QueryFilter<Product>,
     projection?: any,
@@ -68,7 +64,7 @@ export class ProductRepository extends AbstractRepository<Product> {
       .exec();
   }
 
-  // ─── ADDED: Seller-specific methods ───────────────────────────
+  // ─── Seller-specific methods ───────────────────────────────────
   async findSellerProducts(
     sellerId: string,
     filter: QueryFilter<Product>,
@@ -92,8 +88,6 @@ export class ProductRepository extends AbstractRepository<Product> {
     });
   }
 
-  // ─── Validate product ownership ────────────────────────────────
-  // Returns null if product doesn't belong to seller
   async findSellerProduct(sellerId: string, productId: string) {
     return this.productModel
       .findOne({
@@ -105,7 +99,87 @@ export class ProductRepository extends AbstractRepository<Product> {
       .exec();
   }
 
-  // ─── Facets for search sidebar ────────────────────────────────
+  // ─── Home page feeds ──────────────────────────────────────────
+
+  async getNewArrivals(days = 14, limit = 20) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return this.productModel
+      .find({ isDeleted: false, isActive: true, createdAt: { $gte: since } })
+      .populate('category', 'name slug')
+      .populate('brand', 'name slug logo')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  async getTopRated(limit = 20) {
+    return this.productModel
+      .find({
+        isDeleted: false,
+        isActive: true,
+        'stats.totalReviews': { $gt: 0 },
+      })
+      .populate('category', 'name slug')
+      .populate('brand', 'name slug logo')
+      .sort({ 'stats.averageRating': -1, 'stats.totalReviews': -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  async getTrending(limit = 20) {
+    return this.productModel
+      .find({ isDeleted: false, isActive: true })
+      .populate('category', 'name slug')
+      .populate('brand', 'name slug logo')
+      .sort({ viewCount: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  }
+
+  async incrementViewCount(productId: string) {
+    return this.productModel.findByIdAndUpdate(
+      productId,
+      { $inc: { viewCount: 1 } },
+      { new: true },
+    );
+  }
+
+  async incrementCartCount(productId: string) {
+    return this.productModel.findByIdAndUpdate(
+      productId,
+      { $inc: { cartCount: 1 } },
+      { new: true },
+    );
+  }
+
+  async decrementCartCount(productId: string) {
+    return this.productModel.findByIdAndUpdate(
+      productId,
+      { $inc: { cartCount: -1 } },
+      { new: true },
+    );
+  }
+
+  async incrementWishlistCount(productId: string) {
+    return this.productModel.findByIdAndUpdate(
+      productId,
+      { $inc: { wishlistCount: 1 } },
+      { new: true },
+    );
+  }
+
+  async decrementWishlistCount(productId: string) {
+    return this.productModel.findByIdAndUpdate(
+      productId,
+      { $inc: { wishlistCount: -1 } },
+      { new: true },
+    );
+  }
+
+  // ─── Facets ───────────────────────────────────────────────────
   async getFacets(baseFilter: QueryFilter<Product>) {
     const matchFilter = baseFilter as unknown as Record<string, any>;
 
@@ -143,18 +217,14 @@ export class ProductRepository extends AbstractRepository<Product> {
       ratings: ratings.map((r: any) => ({ rating: r._id, count: r.count })),
     };
   }
+
   // ─── Low stock ────────────────────────────────────────────────
   async getLowStockProducts(threshold: number) {
     return this.productModel
-      .find({
-        isDeleted: false,
-        isActive: true,
-        stock: { $gt: 0, $lte: threshold },
-      })
+      .find({ isDeleted: false, isActive: true, stock: { $gt: 0, $lte: threshold } })
       .populate('brand', 'name')
       .populate('category', 'name')
-      .populate('seller', 'userName email')
-      .select('name sku stock images brand category seller')
+      .select('name sku stock images brand category')
       .lean()
       .exec();
   }
@@ -165,8 +235,7 @@ export class ProductRepository extends AbstractRepository<Product> {
       .find({ isDeleted: false, isActive: true, stock: 0 })
       .populate('brand', 'name')
       .populate('category', 'name')
-      .populate('seller', 'userName email')
-      .select('name sku stock images brand category seller')
+      .select('name sku stock images brand category')
       .skip(options.skip)
       .limit(options.limit)
       .lean()

@@ -161,6 +161,9 @@ export class ProductFactoryService {
       stats: product.stats ?? { averageRating: 0, totalReviews: 0 },
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
+      viewCount: product.viewCount ?? 0,
+      cartCount: product.cartCount ?? 0,
+      wishlistCount: product.wishlistCount ?? 0,
     };
   }
 }

@@ -11,7 +11,6 @@ import {
     UseGuards,
     UseInterceptors,
     UploadedFiles,
-    UploadedFile,
 } from '@nestjs/common';
 import { FilesInterceptor, FileFieldsInterceptor } from '@nestjs/platform-express';
 import { SellerService } from './seller.service';
@@ -39,7 +38,6 @@ export class SellerController {
     // DASHBOARD
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/dashboard
     @Get('dashboard')
     @Auth(['Seller'])
     getDashboard(@User() user: any) {
@@ -50,21 +48,18 @@ export class SellerController {
     // PRODUCTS
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/products
     @Get('products')
     @Auth(['Seller'])
     getMyProducts(@User() user: any, @Query() query: GetSellerProductsDto) {
         return this.sellerService.getMyProducts(user._id, query);
     }
 
-    // GET /seller/products/:id
     @Get('products/:id')
     @Auth(['Seller'])
     getMyProduct(@Param('id') id: string, @User() user: any) {
         return this.sellerService.getMyProduct(user._id, id);
     }
 
-    // POST /seller/products
     @Post('products')
     @Auth(['Seller'])
     @UseInterceptors(FilesInterceptor('images', 10, multerMemoryConfig))
@@ -76,7 +71,6 @@ export class SellerController {
         return this.sellerService.createProduct(user._id, dto, files ?? []);
     }
 
-    // PUT /seller/products/:id
     @Put('products/:id')
     @Auth(['Seller'])
     @UseInterceptors(FilesInterceptor('images', 10, multerMemoryConfig))
@@ -89,7 +83,6 @@ export class SellerController {
         return this.sellerService.updateProduct(user._id, id, dto, files ?? []);
     }
 
-    // DELETE /seller/products/:id
     @Delete('products/:id')
     @Auth(['Seller'])
     deleteProduct(@Param('id') id: string, @User() user: any) {
@@ -100,14 +93,12 @@ export class SellerController {
     // INVENTORY
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/inventory/alerts
     @Get('inventory/alerts')
     @Auth(['Seller'])
     getStockAlerts(@User() user: any) {
         return this.sellerService.getStockAlerts(user._id);
     }
 
-    // PATCH /seller/inventory/:productId/adjust
     @Patch('inventory/:productId/adjust')
     @Auth(['Seller'])
     adjustStock(
@@ -122,14 +113,12 @@ export class SellerController {
     // ORDERS
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/orders
     @Get('orders')
     @Auth(['Seller'])
     getMyOrders(@User() user: any, @Query() query: GetSellerOrdersDto) {
         return this.sellerService.getMyOrders(user._id, query);
     }
 
-    // GET /seller/orders/:id
     @Get('orders/:id')
     @Auth(['Seller'])
     getMyOrderDetails(@Param('id') id: string, @User() user: any) {
@@ -140,7 +129,6 @@ export class SellerController {
     // ANALYTICS
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/analytics?period=month
     @Get('analytics')
     @Auth(['Seller'])
     getAnalytics(@User() user: any, @Query() query: SellerAnalyticsDto) {
@@ -151,7 +139,6 @@ export class SellerController {
     // REVIEWS
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/reviews
     @Get('reviews')
     @Auth(['Seller'])
     getMyReviews(
@@ -163,47 +150,67 @@ export class SellerController {
     }
 
     // ════════════════════════════════════════════════════════════════
-    // BAZAAR
+    // BAZAAR — Seller
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/bazaar
     @Get('bazaar')
     @Auth(['Seller'])
     getMyBazaar(@User() user: any) {
         return this.sellerService.getMyBazaar(user._id);
     }
 
-    // PUT /seller/bazaar
     @Put('bazaar')
     @Auth(['Seller'])
     @UseInterceptors(
         FileFieldsInterceptor(
-            [
-                { name: 'logo', maxCount: 1 },
-                { name: 'banner', maxCount: 1 },
-            ],
+            [{ name: 'logo', maxCount: 1 }, { name: 'banner', maxCount: 1 }],
             multerMemoryConfig,
         ),
     )
     updateBazaar(
         @User() user: any,
         @Body() dto: UpdateBazaarDto,
-        @UploadedFiles()
-        files: { logo?: Express.Multer.File[]; banner?: Express.Multer.File[] },
+        @UploadedFiles() files: { logo?: Express.Multer.File[]; banner?: Express.Multer.File[] },
     ) {
         return this.sellerService.updateBazaar(
-            user._id,
-            dto,
-            files?.logo?.[0],
-            files?.banner?.[0],
+            user._id, dto, files?.logo?.[0], files?.banner?.[0],
         );
     }
 
+    // ─── Seller sends notification to followers ───────────────────
+    @Post('bazaar/notify')
+    @Auth(['Seller'])
+    notifyFollowers(
+        @User() user: any,
+        @Body() body: { title: string; body: string },
+    ) {
+        return this.sellerService.notifyBazaarFollowers(user._id, body.title, body.body);
+    }
+
     // ════════════════════════════════════════════════════════════════
-    // PUBLIC — Bazaar Search (no auth needed)
+    // BAZAAR — Admin
     // ════════════════════════════════════════════════════════════════
 
-    // GET /seller/bazaar/search?search=store&page=1
+    @Get('bazaar/admin/all')
+    @Auth(['Admin'])
+    getAllBazaarsAdmin(
+        @Query('search') search: string,
+        @Query('page') page = 1,
+        @Query('limit') limit = 10,
+    ) {
+        return this.sellerService.getAllBazaarsAdmin(search, +page, +limit);
+    }
+
+    @Patch('bazaar/admin/:sellerId/toggle')
+    @Auth(['Admin'])
+    toggleBazaar(@Param('sellerId') sellerId: string) {
+        return this.sellerService.toggleBazaarStatus(sellerId);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // BAZAAR — Public
+    // ════════════════════════════════════════════════════════════════
+
     @Get('bazaar/search')
     @Public()
     searchBazaars(
@@ -214,7 +221,6 @@ export class SellerController {
         return this.sellerService.searchBazaars(search, +page, +limit);
     }
 
-    // GET /seller/bazaar/:slug  — public store page
     @Get('bazaar/:slug')
     @Public()
     getBazaarBySlug(
