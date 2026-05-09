@@ -18,6 +18,7 @@ import { RejectBrandDto } from './dto/reject-brand.dto';
 import { UpdateBrandStatsDto } from './dto/update-brand-stats.dto';
 import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
 import { AuthService } from '../auth/auth.service';
+import { UserRepository } from '../../models/common/user.repository';
 
 @Injectable()
 export class BrandService {
@@ -27,6 +28,8 @@ export class BrandService {
     private readonly brandFactoryService: BrandFactoryService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly authService: AuthService,
+    private readonly userRepository: UserRepository,
+
   ) { }
 
   // ─── Create Brand ──────────────────────────────────────────────
@@ -185,20 +188,21 @@ export class BrandService {
     const brand = this.brandFactoryService.buildBrandFromRequest(request as any, user);
     const createdBrand = await this.brandRepository.create({ ...brand } as any);
 
-    const populatedRequest = await this.brandRequestRepository.getOne({
-      _id: new Types.ObjectId(requestId),
-    });
+    const populatedRequest = await this.brandRequestRepository
+      .getOne({ _id: new Types.ObjectId(requestId) });
 
-    const requesterEmail = (populatedRequest as any)?.requestedBy?.email;
-    const requesterName = (populatedRequest as any)?.requestedBy?.userName;
-    const whatsappLink = (populatedRequest as any)?.whatsappLink;
+    const requestedById = (populatedRequest as any)?.requestedBy;
 
-    if (requesterEmail) {
-      await this.authService.createSellerFromRequest({
-        name: requesterName || 'Seller',
-        email: requesterEmail,
-        whatsappLink: whatsappLink || '',
-      });
+    if (requestedById) {
+      const requester = await this.userRepository.findById(requestedById.toString());
+
+      if (requester) {
+        await this.authService.createSellerFromRequest({
+          name: (requester as any).name || 'Seller',
+          email: (requester as any).email,
+          whatsappLink: (populatedRequest as any)?.whatsappLink || '',
+        });
+      }
     }
 
     await this.brandRequestRepository.updateOne(
