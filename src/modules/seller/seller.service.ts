@@ -16,6 +16,7 @@ import { InventoryService } from '../inventory/inventory.service';
 import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
 import { ProductFactoryService } from '../product/factory';
 import { NotificationService } from '../notification/notification.service';
+import { UserRepository } from '../../models/common/user.repository';
 
 import {
     SellerCreateProductDto,
@@ -39,6 +40,8 @@ export class SellerService {
         private readonly cloudinaryService: CloudinaryService,
         private readonly productFactory: ProductFactoryService,
         private readonly notificationService: NotificationService,
+        private readonly userRepository: UserRepository,
+
     ) { }
 
     // ════════════════════════════════════════════════════════════════
@@ -521,8 +524,34 @@ export class SellerService {
                 banner: null,
                 featuredCategories: [],
                 isActive: true,
-                stats: { totalProducts: 0, totalOrders: 0, totalRevenue: 0, averageRating: 0, totalReviews: 0 },
+                stats: {
+                    totalProducts: 0,
+                    totalOrders: 0,
+                    totalRevenue: 0,
+                    averageRating: 0,
+                    totalReviews: 0,
+                },
             } as any);
+
+            // ─── Notify seller ────────────────────────────────────────
+            this.notificationService.create({
+                user: sellerId,
+                type: 'bazaar_new',
+                title: '🏪 Your Bazaar is Ready!',
+                body: 'Your store has been created. Start adding products and customizing your store.',
+                data: { bazaarId: (bazaar as any)._id?.toString() },
+            }).catch(() => null);
+
+            // ─── Notify all customers async ───────────────────────────
+            this.userRepository.findAllCustomers().then((customers) => {
+                const customerIds = customers.map((c: any) => c._id.toString());
+                return this.notificationService.createBulk(customerIds, {
+                    type: 'bazaar_new',
+                    title: '🏪 New Store Just Opened!',
+                    body: 'A new store is now available on Brand Hive. Check it out!',
+                    data: { storeSlug: (bazaar as any).storeSlug },
+                });
+            }).catch(() => null);
         }
 
         return { data: bazaar };

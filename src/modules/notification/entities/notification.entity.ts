@@ -8,6 +8,9 @@ export enum NotificationTypeEnum {
   ORDER_CANCELED = 'order_canceled',
   PRICE_DROP = 'price_drop',
   STOCK_ALERT = 'stock_alert',
+  // ─── ADDED ────────────────────────────────────────────────────
+  BAZAAR_UPDATE = 'bazaar_update',
+  BAZAAR_NEW = 'bazaar_new',
   GENERAL = 'general',
 }
 

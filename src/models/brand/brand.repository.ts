@@ -30,11 +30,7 @@ export class BrandRepository extends AbstractRepository<Brand> {
     return this.brandModel.countDocuments(filter).exec();
   }
 
-  // ─── Brands by category ────────────────────────────────────────
-  async findByCategory(
-    categoryId: Types.ObjectId,
-    options: { skip: number; limit: number },
-  ) {
+  async findByCategory(categoryId: Types.ObjectId, options: { skip: number; limit: number }) {
     return this.brandModel
       .find({ categories: categoryId, isDeleted: false, isActive: true })
       .populate('categories', 'name slug')
@@ -48,5 +44,14 @@ export class BrandRepository extends AbstractRepository<Brand> {
     return this.brandModel
       .countDocuments({ categories: categoryId, isDeleted: false, isActive: true })
       .exec();
+  }
+
+  // ─── ADDED: track brand page views ────────────────────────────
+  async incrementViewCount(brandId: string) {
+    return this.brandModel.findByIdAndUpdate(
+      brandId,
+      { $inc: { 'stats.viewCount': 1 } },
+      { new: true },
+    );
   }
 }

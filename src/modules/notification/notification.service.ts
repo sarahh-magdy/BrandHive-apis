@@ -11,12 +11,34 @@ export class NotificationService {
     private readonly notificationFactory: NotificationFactoryService,
   ) { }
 
-  // ─── Create (called internally from other services) ───────────
+  // ─── Create single (called internally) ───────────────────────
   async create(input: BuildNotificationInput) {
     const entity = this.notificationFactory.build(input);
-    // ─── Guard: لو الـ user مش valid (زي 'ADMIN') → skip ─────
     if (!entity) return null;
     return this.notificationRepository.create({ ...entity } as any);
+  }
+
+  // ─── ADDED: Create bulk — بتبعت لـ list من الـ users ──────────
+  // بتستخدمها لما بتعمل bazaar جديد وعايز تبعت لكل الـ customers
+  async createBulk(
+    userIds: string[],
+    input: Omit<BuildNotificationInput, 'user'>,
+  ) {
+    const validIds = userIds.filter((id) => Types.ObjectId.isValid(id));
+    if (!validIds.length) return;
+
+    const notifications = validIds.map((userId) => ({
+      user: new Types.ObjectId(userId),
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      data: input.data ?? null,
+      isRead: false,
+      readAt: null,
+    }));
+
+    // ─── insertMany أسرع من loop of create ────────────────────
+    await this.notificationRepository['notifModel'].insertMany(notifications);
   }
 
   // ─── Get User Notifications ───────────────────────────────────

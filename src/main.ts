@@ -13,7 +13,6 @@ async function bootstrap() {
 
   app.enableCors();
 
-  // 2. إعداد Swagger
   const config = new DocumentBuilder()
     .setTitle('BrandHive APIs')
     .setDescription('The API documentation for BrandHive graduation project')
@@ -21,7 +20,7 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document); // المسار هيكون /docs
+  SwaggerModule.setup('docs', app, document); 
 
   app.useGlobalPipes(
     new ValidationPipe({

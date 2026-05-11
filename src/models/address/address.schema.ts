@@ -30,11 +30,9 @@ export class Address {
   @Prop({ type: String, default: 'Egypt', trim: true })
   country: string;
 
-  // ─── Default address flag ──────────────────────────────────────
   @Prop({ type: Boolean, default: false })
   isDefault: boolean;
 
-  // ─── Label (Home, Work, Other) ─────────────────────────────────
   @Prop({ type: String, enum: ['Home', 'Work', 'Other'], default: 'Home' })
   label: string;
 }

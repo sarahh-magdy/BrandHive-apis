@@ -7,7 +7,7 @@ import { User, UserDocument } from './user.schema';
 export class UserRepository {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
-  ) {}
+  ) { }
 
   async create(data: Partial<User>): Promise<UserDocument> {
     return this.userModel.create(data);
@@ -20,44 +20,29 @@ export class UserRepository {
     return this.userModel.findOne(filter).select(select || '').exec();
   }
 
-async findById(id: string, select?: string): Promise<UserDocument | null> {
-  const query = this.userModel.findById(id);
-
-  if (select) {
-    query.select(select);
+  async findById(id: string, select?: string): Promise<UserDocument | null> {
+    const query = this.userModel.findById(id);
+    if (select) query.select(select);
+    return query.exec();
   }
 
-  return query.exec();
-}
-async findByIdWithPassword(id: string): Promise<UserDocument | null> {
-  return this.userModel.findById(id).select('+password').exec();
-}
-  async findByEmail(
-    email: string,
-    select?: string,
-  ): Promise<UserDocument | null> {
-    return this.userModel
-      .findOne({ email })
-      .select(select || '')
-      .exec();
+  async findByIdWithPassword(id: string): Promise<UserDocument | null> {
+    return this.userModel.findById(id).select('+password').exec();
   }
 
-  async updateById(
-    id: string,
-    update: UpdateQuery<UserDocument>,
-  ): Promise<UserDocument | null> {
-    return this.userModel
-      .findByIdAndUpdate(id, update, { new: true })
-      .exec();
+  async findByEmail(email: string, select?: string): Promise<UserDocument | null> {
+    return this.userModel.findOne({ email }).select(select || '').exec();
+  }
+
+  async updateById(id: string, update: UpdateQuery<UserDocument>): Promise<UserDocument | null> {
+    return this.userModel.findByIdAndUpdate(id, update, { new: true }).exec();
   }
 
   async updateOne(
     filter: QueryFilter<UserDocument>,
     update: UpdateQuery<UserDocument>,
   ): Promise<UserDocument | null> {
-    return this.userModel
-      .findOneAndUpdate(filter, update, { new: true })
-      .exec();
+    return this.userModel.findOneAndUpdate(filter, update, { new: true }).exec();
   }
 
   async deleteById(id: string): Promise<void> {
@@ -66,5 +51,14 @@ async findByIdWithPassword(id: string): Promise<UserDocument | null> {
 
   async findAll(filter: QueryFilter<UserDocument> = {}): Promise<UserDocument[]> {
     return this.userModel.find(filter).exec();
+  }
+
+  // ─── ADDED: جيب كل الـ customers عشان نبعتلهم notifications ──
+  async findAllCustomers(): Promise<{ _id: string }[]> {
+    return this.userModel
+      .find({ role: 'customer', isActive: true })
+      .select('_id')
+      .lean()
+      .exec() as any;
   }
 }

@@ -57,12 +57,15 @@ export class Brand {
       averageRating: { type: Number, default: 0 },
       totalReviews: { type: Number, default: 0 },
       totalSales: { type: Number, default: 0 },
+      // ─── ADDED ──────────────────────────────────────────────────
+      viewCount: { type: Number, default: 0 },
     },
     default: () => ({
       totalProducts: 0,
       averageRating: 0,
       totalReviews: 0,
       totalSales: 0,
+      viewCount: 0,
     }),
   })
   stats: {
@@ -70,6 +73,7 @@ export class Brand {
     averageRating: number;
     totalReviews: number;
     totalSales: number;
+    viewCount: number;
   };
 }
 

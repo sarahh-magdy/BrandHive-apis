@@ -7,7 +7,7 @@ import {
 import { Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 
-import { WishlistRepository , ProductRepository} from '@models/index';
+import { WishlistRepository, ProductRepository } from '@models/index';
 import { CartService } from '../cart/cart.service';
 import { WishlistFactoryService } from './factory';
 import { sendMail } from '@common/helpers/send-mail.helper';
@@ -21,13 +21,10 @@ export class WishlistService {
     private readonly cartService: CartService,
     private readonly wishlistFactoryService: WishlistFactoryService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
-  // ─── Helpers ──────────────────────────────────────────────────
   private async getOrCreateWishlist(userId: string) {
-    let wishlist = await this.wishlistRepository.getOne({
-      user: new Types.ObjectId(userId),
-    });
+    let wishlist = await this.wishlistRepository.getOne({ user: new Types.ObjectId(userId) });
     if (!wishlist) {
       wishlist = await this.wishlistRepository.create({
         user: new Types.ObjectId(userId),
@@ -65,15 +62,13 @@ export class WishlistService {
       };
     }
 
-    // ─── Sync prices and detect drops ─────────────────────────
     await this.syncPricesAndNotify(userId, wishlist);
-
     const updated = await this.wishlistRepository.findWishlistPopulated(userId);
     return { data: this.wishlistFactoryService.mapWishlist(updated) };
   }
 
   // ════════════════════════════════════════════════════════════════
-  // GET WISHLIST COUNT (UX endpoint)
+  // GET WISHLIST COUNT
   // ════════════════════════════════════════════════════════════════
   async getWishlistCount(userId: string) {
     const count = await this.wishlistRepository.getWishlistCount(userId);
@@ -89,11 +84,11 @@ export class WishlistService {
     const wishlist = await this.getOrCreateWishlist(userId);
     const items = [...(wishlist as any).items];
 
-    // ─── Prevent duplicates ────────────────────────────────────
-    const alreadyExists = items.some(
-      (i: any) => i.product.toString() === dto.productId,
-    );
+    const alreadyExists = items.some((i: any) => i.product.toString() === dto.productId);
     if (alreadyExists) throw new ConflictException('Product already in wishlist');
+
+    // ─── ADDED: increment wishlistCount ───────────────────────────
+    this.productRepository.incrementWishlistCount(dto.productId).catch(() => null);
 
     const newItem = this.wishlistFactoryService.buildWishlistItem(product);
     items.push(newItem);
@@ -115,15 +110,16 @@ export class WishlistService {
   // REMOVE FROM WISHLIST
   // ════════════════════════════════════════════════════════════════
   async removeFromWishlist(userId: string, productId: string) {
-    const wishlist = await this.wishlistRepository.getOne({
-      user: new Types.ObjectId(userId),
-    });
+    const wishlist = await this.wishlistRepository.getOne({ user: new Types.ObjectId(userId) });
     if (!wishlist) throw new NotFoundException('Wishlist not found');
 
     const itemExists = (wishlist as any).items.some(
       (i: any) => i.product.toString() === productId,
     );
     if (!itemExists) throw new NotFoundException('Product not found in wishlist');
+
+    // ─── ADDED: decrement wishlistCount ───────────────────────────
+    this.productRepository.decrementWishlistCount(productId).catch(() => null);
 
     const items = (wishlist as any).items.filter(
       (i: any) => i.product.toString() !== productId,
@@ -146,6 +142,14 @@ export class WishlistService {
   // CLEAR WISHLIST
   // ════════════════════════════════════════════════════════════════
   async clearWishlist(userId: string) {
+    // ─── ADDED: decrement wishlistCount لكل item ──────────────────
+    const wishlist = await this.wishlistRepository.getOne({ user: new Types.ObjectId(userId) });
+    if (wishlist && (wishlist as any).items?.length) {
+      for (const item of (wishlist as any).items) {
+        this.productRepository.decrementWishlistCount(item.product.toString()).catch(() => null);
+      }
+    }
+
     await this.wishlistRepository.updateOne(
       { user: new Types.ObjectId(userId) },
       { items: [] },
@@ -155,76 +159,55 @@ export class WishlistService {
   }
 
   // ════════════════════════════════════════════════════════════════
-  // MOVE SINGLE ITEM TO CART
+  // MOVE TO CART
   // ════════════════════════════════════════════════════════════════
   async moveToCart(userId: string, productId: string) {
-    // ─── Validate product & stock ──────────────────────────────
     const product = await this.productRepository.getOne({
       _id: new Types.ObjectId(productId),
       isDeleted: false,
       isActive: true,
     });
     if (!product) throw new NotFoundException('Product not found or unavailable');
+    if ((product as any).stock === 0) throw new BadRequestException('Product is out of stock');
 
-    if ((product as any).stock === 0) {
-      throw new BadRequestException('Product is out of stock');
-    }
-
-    // ─── Check product is in wishlist ──────────────────────────
-    const wishlist = await this.wishlistRepository.getOne({
-      user: new Types.ObjectId(userId),
-    });
+    const wishlist = await this.wishlistRepository.getOne({ user: new Types.ObjectId(userId) });
     const inWishlist = (wishlist as any)?.items?.some(
       (i: any) => i.product.toString() === productId,
     );
     if (!inWishlist) throw new NotFoundException('Product not found in wishlist');
 
-    // ─── Add to cart ───────────────────────────────────────────
     await this.cartService.addToCart(userId, { productId, quantity: 1 });
-
-    // ─── Remove from wishlist ──────────────────────────────────
     await this.removeFromWishlist(userId, productId);
 
     return { message: 'Product moved to cart successfully' };
   }
 
   // ════════════════════════════════════════════════════════════════
-  // MOVE ALL (or selected) TO CART
+  // MOVE ALL TO CART
   // ════════════════════════════════════════════════════════════════
   async moveAllToCart(userId: string, dto: MoveAllToCartDto) {
-    const wishlist = await this.wishlistRepository.getOne({
-      user: new Types.ObjectId(userId),
-    });
-
-    if (!wishlist || !(wishlist as any).items?.length) {
-      throw new BadRequestException('Wishlist is empty');
-    }
+    const wishlist = await this.wishlistRepository.getOne({ user: new Types.ObjectId(userId) });
+    if (!wishlist || !(wishlist as any).items?.length) throw new BadRequestException('Wishlist is empty');
 
     let targetItems = (wishlist as any).items;
     if (dto.productIds?.length) {
-      targetItems = targetItems.filter((i: any) =>
-        dto.productIds?.includes(i.product.toString())
-      );
+      targetItems = targetItems.filter((i: any) => dto.productIds?.includes(i.product.toString()));
     }
 
     const results = { moved: [] as string[], skipped: [] as string[] };
 
     for (const item of targetItems) {
       const productId = item.product.toString();
-
       try {
         const product = await this.productRepository.getOne({
           _id: item.product,
           isDeleted: false,
           isActive: true,
         });
-
-        // ─── Skip if unavailable or out of stock ──────────────
         if (!product || (product as any).stock === 0) {
           results.skipped.push(item.productName);
           continue;
         }
-
         await this.cartService.addToCart(userId, { productId, quantity: 1 });
         results.moved.push(item.productName);
       } catch {
@@ -232,12 +215,18 @@ export class WishlistService {
       }
     }
 
-    // ─── Remove moved items from wishlist ─────────────────────
     if (results.moved.length) {
       const movedNames = new Set(results.moved);
       const remainingItems = (wishlist as any).items.filter(
         (i: any) => !movedNames.has(i.productName),
       );
+
+      // ─── ADDED: decrement wishlistCount للـ moved items ──────────
+      for (const item of (wishlist as any).items) {
+        if (movedNames.has(item.productName)) {
+          this.productRepository.decrementWishlistCount(item.product.toString()).catch(() => null);
+        }
+      }
 
       await this.wishlistRepository.updateOne(
         { user: new Types.ObjectId(userId) },
@@ -246,29 +235,21 @@ export class WishlistService {
       );
     }
 
-    return {
-      message: `${results.moved.length} item(s) moved to cart`,
-      data: results,
-    };
+    return { message: `${results.moved.length} item(s) moved to cart`, data: results };
   }
 
   // ════════════════════════════════════════════════════════════════
-  // CHECK IF PRODUCT IN WISHLIST
+  // CHECK IF IN WISHLIST
   // ════════════════════════════════════════════════════════════════
   async isInWishlist(userId: string, productId: string) {
-    const wishlist = await this.wishlistRepository.getOne({
-      user: new Types.ObjectId(userId),
-    });
+    const wishlist = await this.wishlistRepository.getOne({ user: new Types.ObjectId(userId) });
     const inWishlist =
-      (wishlist as any)?.items?.some(
-        (i: any) => i.product.toString() === productId,
-      ) ?? false;
-
+      (wishlist as any)?.items?.some((i: any) => i.product.toString() === productId) ?? false;
     return { data: { inWishlist } };
   }
 
   // ════════════════════════════════════════════════════════════════
-  // PRIVATE: Sync Prices + Price Drop Notification (Option C)
+  // PRIVATE: Sync Prices + Notify
   // ════════════════════════════════════════════════════════════════
   private async syncPricesAndNotify(userId: string, wishlist: any) {
     const items = [...wishlist.items];
@@ -284,25 +265,21 @@ export class WishlistService {
       const currentEffective = currentDiscountPrice ?? currentPrice;
       const snapshotEffective = item.snapshotDiscountPrice ?? item.snapshotPrice;
 
-      // ─── Update current price ──────────────────────────────
       if (item.currentPrice !== currentPrice || item.currentDiscountPrice !== currentDiscountPrice) {
         item.currentPrice = currentPrice;
         item.currentDiscountPrice = currentDiscountPrice;
         changed = true;
       }
 
-      // ─── Price Drop Detection ──────────────────────────────
       const dropped = currentEffective < snapshotEffective;
 
       if (dropped && !item.notificationSent) {
-        // ─── In-app flag ────────────────────────────────────
         item.priceDropped = true;
         item.notificationSent = true;
         changed = true;
         priceDropItems.push(item.productName);
       }
 
-      // ─── Reset flag لو السعر رجع أو زاد ──────────────────
       if (!dropped && item.priceDropped) {
         item.priceDropped = false;
         item.notificationSent = false;
@@ -318,27 +295,17 @@ export class WishlistService {
       );
     }
 
-    // ─── Email notification for price drops ───────────────────
     if (priceDropItems.length) {
       await this.sendPriceDropEmail(userId, wishlist, priceDropItems);
     }
   }
 
-  // ─── Send Price Drop Email ────────────────────────────────────
-  private async sendPriceDropEmail(
-    userId: string,
-    wishlist: any,
-    droppedItems: string[],
-  ) {
-    // بنجيب الـ user email من الـ populated wishlist
+  private async sendPriceDropEmail(userId: string, wishlist: any, droppedItems: string[]) {
     const userEmail = wishlist?.user?.email;
     const userName = wishlist?.user?.userName ?? 'there';
-
     if (!userEmail) return;
 
-    const itemsList = droppedItems
-      .map((name) => `<li style="padding:4px 0">${name}</li>`)
-      .join('');
+    const itemsList = droppedItems.map((name) => `<li style="padding:4px 0">${name}</li>`).join('');
 
     sendMail({
       to: userEmail,
