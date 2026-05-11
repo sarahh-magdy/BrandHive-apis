@@ -350,6 +350,38 @@ export class OrderService {
         : 'All items added to cart',
     };
   }
+  // ════════════════════════════════════════════════════════════════
+  // MARK AS PAID (Admin)
+  // ════════════════════════════════════════════════════════════════
+  async markOrderAsPaid(orderId: string, adminId: string) {
+    const order = await this.orderRepository.getOne({
+      _id: new Types.ObjectId(orderId),
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+
+    if ((order as any).paymentStatus === PaymentStatus.PAID) {
+      throw new BadRequestException('Order is already paid');
+    }
+
+    if ((order as any).paymentMethod !== PaymentMethod.COD) {
+      throw new BadRequestException(
+        'Only COD orders can be manually marked as paid',
+      );
+    }
+
+    await this.orderRepository.markAsPaid(orderId);
+
+    await this.notificationService.create({
+      user: (order as any).user.toString(),
+      type: 'order_paid',
+      title: 'Payment Confirmed',
+      body: `Payment for order #${(order as any).orderNumber} has been confirmed.`,
+      data: { orderId },
+    });
+
+    return { message: 'Order marked as paid successfully' };
+  }
 
   // ════════════════════════════════════════════════════════════════
   // GET INVOICE

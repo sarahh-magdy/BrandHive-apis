@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { QueryFilter, Model, Types } from 'mongoose';
 import { AbstractRepository } from '../abstract.repository';
-import { Order } from './order.schema';
+import { Order, PaymentStatus } from './order.schema';
 
 @Injectable()
 export class OrderRepository extends AbstractRepository<Order> {
@@ -38,6 +38,16 @@ export class OrderRepository extends AbstractRepository<Order> {
       .lean()
       .exec();
 
+  }
+  async markAsPaid(orderId: string) {
+    return this.orderModel.findByIdAndUpdate(
+      new Types.ObjectId(orderId),
+      {
+        paymentStatus: PaymentStatus.PAID,
+        paidAt: new Date(),
+      },
+      { new: true },
+    );
   }
 
   // ─── ADDED: Seller-specific order fetch ───────────────────────

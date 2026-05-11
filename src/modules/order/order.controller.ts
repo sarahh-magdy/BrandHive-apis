@@ -97,6 +97,11 @@ export class OrderController {
   ) {
     return this.orderService.updateOrderStatus(id, dto, user._id);
   }
+  @Patch('admin/:id/mark-paid')
+  @Auth(['Admin'])
+  markOrderAsPaid(@Param('id') id: string, @User() user: any) {
+    return this.orderService.markOrderAsPaid(id, user._id);
+  }
 
   @Post('admin/:id/cancel')
   @Auth(['Admin'])
@@ -113,4 +118,5 @@ export class OrderController {
   getInvoice(@Param('id') id: string, @User() user: any) {
     return this.orderService.getInvoice(id, user._id, 'Admin');
   }
+
 }
