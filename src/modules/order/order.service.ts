@@ -144,7 +144,8 @@ export class OrderService {
       data: { orderId: (created as any)._id.toString() },
     });
 
-    const response: any = { message: 'Order created successfully', data: created };
+    // ─── Return populated ─────────────────────────────────────
+    const response: any = { message: 'Order created successfully', data: populated };
     if (paymentResult?.paymentUrl) response.paymentUrl = paymentResult.paymentUrl;
     return response;
   }

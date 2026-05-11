@@ -37,6 +37,7 @@ export class OrderRepository extends AbstractRepository<Order> {
       .populate('items.product', 'name slug images sku seller')
       .lean()
       .exec();
+
   }
 
   // ─── ADDED: Seller-specific order fetch ───────────────────────
@@ -53,6 +54,7 @@ export class OrderRepository extends AbstractRepository<Order> {
       })
       .populate('user', 'userName email')
       .populate('items.product', 'name slug images sku seller')
+      .populate('user', '-password -__v')
       .sort({ createdAt: -1 })
       .skip(options.skip)
       .limit(options.limit)
