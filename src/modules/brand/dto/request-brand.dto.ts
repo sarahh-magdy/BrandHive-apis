@@ -10,6 +10,7 @@ import {
   IsPhoneNumber,
   isNotEmpty,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class RequestBrandDto {
   @IsString()
@@ -45,6 +46,7 @@ export class RequestBrandDto {
 
   @IsOptional()
   @IsBoolean()
+  @Transform(({ value }) => value === 'true')
   shipsInternationally?: boolean;
 
   @IsNotEmpty()
