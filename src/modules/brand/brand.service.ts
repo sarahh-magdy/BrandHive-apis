@@ -161,8 +161,8 @@ export class BrandService {
     const created = await this.brandRequestRepository.create({ ...request, whatsappLink: dto.whatsappLink } as any);
 
     // ─── ADDED: بعت notification للـ admins بـ silent fail ────────
-    this.notifyAdminsOfNewRequest(dto.name, user).catch(() => null);
-
+    // ─── مؤقت ────
+    await this.notifyAdminsOfNewRequest(dto.name, user);
     return created;
   }
 
@@ -275,8 +275,16 @@ export class BrandService {
   // ─── Private: notify admins of new brand request ───────────────
   private async notifyAdminsOfNewRequest(brandName: string, requester: any) {
     const admins = await this.userRepository.findAll({ role: 'Admin' });
+
+    console.log('Admins raw:', JSON.stringify(admins.map((a: any) => ({ id: a._id, role: a.role }))));
+
     const adminIds = admins.map((a: any) => a._id.toString());
-    if (!adminIds.length) return;
+    console.log('Admin IDs:', adminIds);
+
+    if (!adminIds.length) {
+      console.log('❌ No admins found');
+      return;
+    }
 
     await this.notificationService.createBulk(adminIds, {
       type: NotificationTypeEnum.GENERAL,
@@ -284,6 +292,8 @@ export class BrandService {
       body: `${requester.name || 'A user'} submitted a request for brand "${brandName}"`,
       data: { brandName, requestedBy: requester._id?.toString() },
     });
+
+    console.log('✅ Done');
   }
 
   // ─── Private ───────────────────────────────────────────────────
