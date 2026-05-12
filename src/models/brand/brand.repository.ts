@@ -54,4 +54,7 @@ export class BrandRepository extends AbstractRepository<Brand> {
       { new: true },
     );
   }
+  async findByFilter(filter: QueryFilter<Brand>): Promise<Brand[]> {
+    return this.brandModel.find(filter).lean().exec();
+  }
 }

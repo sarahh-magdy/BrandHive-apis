@@ -10,6 +10,8 @@ import { Product, ProductSchema } from '../../models/product/product.schema';
 
 import { ProductFactoryService } from '../product/factory';
 
+import { Brand, BrandSchema } from '../../models/brand/brand.schema';
+import { BrandRepository } from '../../models/brand/brand.repository';
 import { UserMongoModule } from '../../shared/modules/user-mongo.module';
 
 import { CloudinaryModule } from '../../config/cloudinary/cloudinary.module';
@@ -22,6 +24,8 @@ import { CloudinaryModule } from '../../config/cloudinary/cloudinary.module';
 
         MongooseModule.forFeature([
             { name: Product.name, schema: ProductSchema },
+            { name: Brand.name, schema: BrandSchema }, // ─── ADDED
+
         ]),
     ],
 
@@ -31,6 +35,7 @@ import { CloudinaryModule } from '../../config/cloudinary/cloudinary.module';
         SearchService,
         ProductRepository,
         ProductFactoryService,
+        BrandRepository,
     ],
 
     exports: [SearchService],

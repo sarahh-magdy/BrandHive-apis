@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import { ProductRepository } from '../../models/product/product.repository';
 import { ProductFactoryService } from '../product/factory';
 import { SearchProductsDto, SortBy } from './dto/search.dto';
+import { BrandRepository } from '../../models/brand/brand.repository';
 
 // ─── Low Stock Threshold ───────────────────────────────────────────
 export const LOW_STOCK_THRESHOLD = 5;
@@ -12,6 +13,8 @@ export class SearchService {
     constructor(
         private readonly productRepository: ProductRepository,
         private readonly productFactory: ProductFactoryService,
+        private readonly brandRepository: BrandRepository, // ─── ADDED
+
     ) { }
 
     // ════════════════════════════════════════════════════════════════
@@ -31,6 +34,7 @@ export class SearchService {
             onSale,
             sortBy = SortBy.NEWEST,
             withFacets = false,
+            shipsInternationally
         } = query;
 
         const skip = (page - 1) * limit;
@@ -49,6 +53,32 @@ export class SearchService {
                 { tags: { $elemMatch: { $regex: search, $options: 'i' } } },
                 { sku: { $regex: search, $options: 'i' } },
             ];
+        }
+        // ─── Ships internationally filter ────────────────────────────
+        // بنجيب الـ brand IDs اللي shipsInternationally = true
+        // وبنضيفها على فلتر الـ brand
+        if (shipsInternationally !== undefined) {
+            const matchingBrands = await this.brandRepository.findByFilter({
+                shipsInternationally,
+                isDeleted: false,
+                isActive: true,
+            });
+
+            const brandIds = matchingBrands.map((b: any) => b._id);
+
+            // لو في brand filter تاني → تقاطع الاتنين
+            if (baseFilter.brand) {
+                const existing =
+                    baseFilter.brand.$in ?? [baseFilter.brand];
+                const intersection = existing.filter((id: Types.ObjectId) =>
+                    brandIds.some((b: Types.ObjectId) => b.equals(id)),
+                );
+                baseFilter.brand = intersection.length === 1
+                    ? intersection[0]
+                    : { $in: intersection };
+            } else {
+                baseFilter.brand = { $in: brandIds };
+            }
         }
 
         // ─── Category filter ──────────────────────────────────────

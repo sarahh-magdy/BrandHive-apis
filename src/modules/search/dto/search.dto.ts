@@ -90,4 +90,9 @@ export class SearchProductsDto {
     @Type(() => Boolean)
     @IsBoolean()
     withFacets?: boolean = false;
+
+    @IsOptional()
+    @Type(() => Boolean)
+    @IsBoolean()
+    shipsInternationally?: boolean;
 }

@@ -19,19 +19,15 @@ export class SearchHistory {
     @Prop({ required: true, maxlength: 200, index: true })
     query: string;
 
-    /** Normalised lowercase version for deduplication */
     @Prop({ required: true })
     queryNorm: string;
 
-    /** How many results were returned for this query */
     @Prop({ default: 0 })
     resultsCount: number;
 
-    /** Filters applied alongside the query (stored for analytics) */
     @Prop({ type: Object, default: {} })
     appliedFilters: Record<string, any>;
 
-    /** Did the user click a result after this search? */
     @Prop({ default: false })
     resulted_in_click: boolean;
 
@@ -47,10 +43,6 @@ SearchHistorySchema.index({ queryNorm: 1 });
 
 export type PopularSearchDocument = PopularSearch & Document;
 
-/**
- * PopularSearch — aggregated leaderboard, updated by a cron job.
- * Allows O(1) reads for the "trending searches" widget.
- */
 @Schema({ timestamps: true })
 export class PopularSearch {
     @Prop({ required: true, unique: true })
