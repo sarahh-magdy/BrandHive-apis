@@ -3,12 +3,15 @@ import { Types } from 'mongoose';
 import { NotificationRepository } from '../../models/notification/notification.repository';
 import { NotificationFactoryService, BuildNotificationInput } from './factory';
 import { GetNotificationsDto } from './dto/get-notification.dto';
+import { CreateNotificationDto } from './dto/create-notification.dto';
+import { UserRepository } from '../../models/common/user.repository';
 
 @Injectable()
 export class NotificationService {
   constructor(
     private readonly notificationRepository: NotificationRepository,
     private readonly notificationFactory: NotificationFactoryService,
+    private readonly userRepository: UserRepository,
   ) { }
 
   // ─── Create single (called internally) ───────────────────────
@@ -18,8 +21,7 @@ export class NotificationService {
     return this.notificationRepository.create({ ...entity } as any);
   }
 
-  // ─── ADDED: Create bulk — بتبعت لـ list من الـ users ──────────
-  // بتستخدمها لما بتعمل bazaar جديد وعايز تبعت لكل الـ customers
+  // ─── Create bulk ──────────────────────────────────────────────
   async createBulk(
     userIds: string[],
     input: Omit<BuildNotificationInput, 'user'>,
@@ -37,8 +39,33 @@ export class NotificationService {
       readAt: null,
     }));
 
-    // ─── insertMany أسرع من loop of create ────────────────────
     await this.notificationRepository['notifModel'].insertMany(notifications);
+  }
+
+  // ─── Admin: Send notification to one user or all ──────────────
+  async sendNotification(dto: CreateNotificationDto) {
+    if (dto.userId) {
+      await this.create({
+        user: dto.userId,
+        type: dto.type,
+        title: dto.title,
+        body: dto.body,
+        data: dto.data,
+      });
+      return { message: 'Notification sent to user' };
+    }
+
+    const allUsers = await this.userRepository.findAll({});
+    const userIds = allUsers.map((u: any) => u._id.toString());
+
+    await this.createBulk(userIds, {
+      type: dto.type,
+      title: dto.title,
+      body: dto.body,
+      data: dto.data,
+    });
+
+    return { message: `Notification sent to ${userIds.length} users` };
   }
 
   // ─── Get User Notifications ───────────────────────────────────
