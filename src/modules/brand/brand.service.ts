@@ -18,6 +18,8 @@ import { RejectBrandDto } from './dto/reject-brand.dto';
 import { UpdateBrandStatsDto } from './dto/update-brand-stats.dto';
 import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
 import { AuthService } from '../auth/auth.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationTypeEnum } from '../notification/entities/notification.entity';
 import { UserRepository } from '../../models/common/user.repository';
 
 @Injectable()
@@ -28,8 +30,8 @@ export class BrandService {
     private readonly brandFactoryService: BrandFactoryService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly authService: AuthService,
-    // ─── ADDED ────────────────────────────────────────────────────
     private readonly userRepository: UserRepository,
+    private readonly notificationService: NotificationService,
   ) { }
 
   // ─── Create Brand ──────────────────────────────────────────────
@@ -156,7 +158,26 @@ export class BrandService {
     if (pendingRequest) throw new ConflictException('A pending request for this brand already exists');
 
     const request = await this.brandFactoryService.createBrandRequest(dto, user, logoFile);
-    return this.brandRequestRepository.create({ ...request, whatsappLink: dto.whatsappLink } as any);
+    const created = await this.brandRequestRepository.create({ ...request, whatsappLink: dto.whatsappLink } as any);
+
+    // ─── ADDED: بعت notification للـ admins ───────────────────────
+    this.notifyAdminsOfNewRequest(dto.name, user).catch(() => null);
+
+    return created;
+  }
+
+  // ─── Private: بعت للـ admins بـ silent fail ───────────────────
+  private async notifyAdminsOfNewRequest(brandName: string, requester: any) {
+    const admins = await this.userRepository.findAll({ role: 'Admin' });
+    const adminIds = admins.map((a: any) => a._id.toString());
+    if (!adminIds.length) return;
+
+    await this.notificationService.createBulk(adminIds, {
+      type: NotificationTypeEnum.GENERAL,
+      title: '🆕 New Brand Request',
+      body: `${requester.name || 'A user'} submitted a request for brand "${brandName}"`,
+      data: { brandName, requestedBy: requester._id?.toString() },
+    });
   }
 
   // ─── Find All Requests ─────────────────────────────────────────
@@ -260,7 +281,12 @@ export class BrandService {
       { new: true },
     );
   }
-
+  // ─── Track brand view (silent) ────────────────────────────────
+  async trackView(brandId: string) {
+    try {
+      await this.brandRepository.incrementViewCount(brandId);
+    } catch { /* silent */ }
+  }
   // ─── Private ───────────────────────────────────────────────────
   private async checkSlugConflict(slug: string, excludeId?: string) {
     const filter: Record<string, any> = { slug, isDeleted: false };
