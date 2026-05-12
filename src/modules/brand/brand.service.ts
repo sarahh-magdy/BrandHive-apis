@@ -18,9 +18,9 @@ import { RejectBrandDto } from './dto/reject-brand.dto';
 import { UpdateBrandStatsDto } from './dto/update-brand-stats.dto';
 import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
 import { AuthService } from '../auth/auth.service';
+import { UserRepository } from '../../models/common/user.repository';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationTypeEnum } from '../notification/entities/notification.entity';
-import { UserRepository } from '../../models/common/user.repository';
 
 @Injectable()
 export class BrandService {
@@ -31,7 +31,7 @@ export class BrandService {
     private readonly cloudinaryService: CloudinaryService,
     private readonly authService: AuthService,
     private readonly userRepository: UserRepository,
-    private readonly notificationService: NotificationService,
+    private readonly notificationService: NotificationService, // ─── ADDED ───
   ) { }
 
   // ─── Create Brand ──────────────────────────────────────────────
@@ -160,24 +160,10 @@ export class BrandService {
     const request = await this.brandFactoryService.createBrandRequest(dto, user, logoFile);
     const created = await this.brandRequestRepository.create({ ...request, whatsappLink: dto.whatsappLink } as any);
 
-    // ─── ADDED: بعت notification للـ admins ───────────────────────
+    // ─── ADDED: بعت notification للـ admins بـ silent fail ────────
     this.notifyAdminsOfNewRequest(dto.name, user).catch(() => null);
 
     return created;
-  }
-
-  // ─── Private: بعت للـ admins بـ silent fail ───────────────────
-  private async notifyAdminsOfNewRequest(brandName: string, requester: any) {
-    const admins = await this.userRepository.findAll({ role: 'Admin' });
-    const adminIds = admins.map((a: any) => a._id.toString());
-    if (!adminIds.length) return;
-
-    await this.notificationService.createBulk(adminIds, {
-      type: NotificationTypeEnum.GENERAL,
-      title: '🆕 New Brand Request',
-      body: `${requester.name || 'A user'} submitted a request for brand "${brandName}"`,
-      data: { brandName, requestedBy: requester._id?.toString() },
-    });
   }
 
   // ─── Find All Requests ─────────────────────────────────────────
@@ -209,12 +195,9 @@ export class BrandService {
     const brand = this.brandFactoryService.buildBrandFromRequest(request as any, user);
     const createdBrand = await this.brandRepository.create({ ...brand } as any);
 
-    // ─── FIXED: جيب الـ user بيانات من الـ requestedBy ID ─────────
     const requestedById = (request as any)?.requestedBy;
-
     if (requestedById) {
       const requester = await this.userRepository.findById(requestedById.toString());
-
       if (requester) {
         await this.authService.createSellerFromRequest({
           name: (requester as any).name || 'Seller',
@@ -281,12 +264,28 @@ export class BrandService {
       { new: true },
     );
   }
+
   // ─── Track brand view (silent) ────────────────────────────────
   async trackView(brandId: string) {
     try {
       await this.brandRepository.incrementViewCount(brandId);
     } catch { /* silent */ }
   }
+
+  // ─── Private: notify admins of new brand request ───────────────
+  private async notifyAdminsOfNewRequest(brandName: string, requester: any) {
+    const admins = await this.userRepository.findAll({ role: 'Admin' });
+    const adminIds = admins.map((a: any) => a._id.toString());
+    if (!adminIds.length) return;
+
+    await this.notificationService.createBulk(adminIds, {
+      type: NotificationTypeEnum.GENERAL,
+      title: '🆕 New Brand Request',
+      body: `${requester.name || 'A user'} submitted a request for brand "${brandName}"`,
+      data: { brandName, requestedBy: requester._id?.toString() },
+    });
+  }
+
   // ─── Private ───────────────────────────────────────────────────
   private async checkSlugConflict(slug: string, excludeId?: string) {
     const filter: Record<string, any> = { slug, isDeleted: false };
