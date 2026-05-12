@@ -7,6 +7,8 @@ import {
   IsUrl,
   MinLength,
   IsBoolean,
+  IsPhoneNumber,
+  isNotEmpty,
 } from 'class-validator';
 
 export class RequestBrandDto {
@@ -44,4 +46,13 @@ export class RequestBrandDto {
   @IsOptional()
   @IsBoolean()
   shipsInternationally?: boolean;
+
+  @IsNotEmpty()
+  @IsString()
+  city: string;
+
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+
 }

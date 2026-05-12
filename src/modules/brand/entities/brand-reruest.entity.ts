@@ -1,3 +1,5 @@
+// entities/brand-reruest.entity.ts
+
 import { Types } from 'mongoose';
 
 export enum BrandRequestStatus {
@@ -19,6 +21,13 @@ export class BrandRequest {
   categories: Types.ObjectId[];
 
   requestedBy: Types.ObjectId;
+
+  whatsappLink?: string | null;
+  shipsInternationally?: boolean;
+
+  // ─── ADDED ────────────────────────────────────────────────────
+  city?: string | null;
+  phone?: string | null;
 
   status: BrandRequestStatus;
 

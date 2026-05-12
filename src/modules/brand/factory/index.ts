@@ -116,6 +116,8 @@ export class BrandFactoryService {
     request.country = dto.country ?? null;
     request.website = dto.website ?? null;
     request.logo = logo;
+    request.city = dto.city ?? null;
+    request.phone = dto.phone ?? null;
     request.categories = this.toObjectIdArray(dto.categories);
     request.requestedBy = user._id;
     request.status = BrandRequestStatus.PENDING;

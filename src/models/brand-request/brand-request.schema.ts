@@ -55,6 +55,12 @@ export class BrandRequest {
 
   @Prop({ type: Date, default: null })
   reviewedAt: Date | null;
+
+  @Prop({ type: String, trim: true, default: null })
+  city: string | null;
+
+  @Prop({ type: String, trim: true, default: null })
+  phone: string | null;
 }
 
 export const BrandRequestSchema = SchemaFactory.createForClass(BrandRequest);
