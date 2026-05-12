@@ -274,17 +274,11 @@ export class BrandService {
 
   // ─── Private: notify admins of new brand request ───────────────
   private async notifyAdminsOfNewRequest(brandName: string, requester: any) {
-    const admins = await this.userRepository.findAll({ role: 'Admin' });
-
-    console.log('Admins raw:', JSON.stringify(admins.map((a: any) => ({ id: a._id, role: a.role }))));
+    console.log('🔔 NOTIFYING ADMINS:', brandName);
+    const admins = await this.userRepository.findAll({ role: 'admin' }); // ─── lowercase ───
 
     const adminIds = admins.map((a: any) => a._id.toString());
-    console.log('Admin IDs:', adminIds);
-
-    if (!adminIds.length) {
-      console.log('❌ No admins found');
-      return;
-    }
+    if (!adminIds.length) return;
 
     await this.notificationService.createBulk(adminIds, {
       type: NotificationTypeEnum.GENERAL,
@@ -293,7 +287,7 @@ export class BrandService {
       data: { brandName, requestedBy: requester._id?.toString() },
     });
 
-    console.log('✅ Done');
+    console.log('✅ Notifications sent to admins:', adminIds);
   }
 
   // ─── Private ───────────────────────────────────────────────────
