@@ -41,6 +41,9 @@ export class BrandRequest {
   @Prop({ type: String, trim: true, default: null })
   whatsappLink: string | null;
 
+  @Prop({ type: Boolean, default: false })
+  shipsInternationally: boolean;
+
   @Prop({ type: String, enum: BrandRequestStatus, default: BrandRequestStatus.PENDING })
   status: BrandRequestStatus;
 

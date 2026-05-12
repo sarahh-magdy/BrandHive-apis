@@ -6,6 +6,7 @@ import {
   IsString,
   IsUrl,
   MinLength,
+  IsBoolean,
 } from 'class-validator';
 
 export class RequestBrandDto {
@@ -38,4 +39,9 @@ export class RequestBrandDto {
   @IsString()
   @IsOptional()
   whatsappLink?: string;
+
+
+  @IsOptional()
+  @IsBoolean()
+  shipsInternationally?: boolean;
 }
