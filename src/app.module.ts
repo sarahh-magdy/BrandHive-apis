@@ -26,6 +26,7 @@ import { SearchModule } from '@modules/search/search.module';
 import { InventoryModule } from '@modules/inventory/inventory.module';
 import { ReviewModule } from '@modules/review/review.module';
 import { SellerModule } from '@modules/seller/seller.module';
+import { SupportModule } from '@modules/support/support.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -55,7 +56,8 @@ import { SellerModule } from '@modules/seller/seller.module';
     SearchModule,
     InventoryModule,
     ReviewModule,
-    SellerModule
+    SellerModule,
+    SupportModule,
 
 
   ],
