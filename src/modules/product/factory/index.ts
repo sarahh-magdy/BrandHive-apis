@@ -158,7 +158,10 @@ export class ProductFactoryService {
       category: product.category,
       brand: product.brand,
       isActive: product.isActive,
-      stats: product.stats ?? { averageRating: 0, totalReviews: 0 },
+      stats: {
+        averageRating: product.stats?.averageRating ?? 0,
+        totalReviews: product.stats?.totalReviews ?? 0,
+      },
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       viewCount: product.viewCount ?? 0,
