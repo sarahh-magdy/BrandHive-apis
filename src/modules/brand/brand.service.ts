@@ -162,7 +162,7 @@ export class BrandService {
 
     // ─── ADDED: بعت notification للـ admins بـ silent fail ────────
     // ─── مؤقت ────
-    await this.notifyAdminsOfNewRequest(dto.name, user);
+    this.notifyAdminsOfNewRequest(dto.name, user).catch(() => null);
     return created;
   }
 
@@ -274,9 +274,7 @@ export class BrandService {
 
   // ─── Private: notify admins of new brand request ───────────────
   private async notifyAdminsOfNewRequest(brandName: string, requester: any) {
-    console.log('🔔 NOTIFYING ADMINS:', brandName);
-    const admins = await this.userRepository.findAll({ role: 'admin' }); // ─── lowercase ───
-
+    const admins = await this.userRepository.findAll({ role: 'admin' });
     const adminIds = admins.map((a: any) => a._id.toString());
     if (!adminIds.length) return;
 
@@ -286,8 +284,6 @@ export class BrandService {
       body: `${requester.name || 'A user'} submitted a request for brand "${brandName}"`,
       data: { brandName, requestedBy: requester._id?.toString() },
     });
-
-    console.log('✅ Notifications sent to admins:', adminIds);
   }
 
   // ─── Private ───────────────────────────────────────────────────

@@ -119,6 +119,8 @@ export class BrandFactoryService {
     request.city = dto.city ?? null;
     request.phone = dto.phone ?? null;
     request.categories = this.toObjectIdArray(dto.categories);
+    request.whatsappLink = dto.whatsappLink ?? null;
+    request.shipsInternationally = dto.shipsInternationally ?? false;
     request.requestedBy = user._id;
     request.status = BrandRequestStatus.PENDING;
     request.rejectionReason = null;
