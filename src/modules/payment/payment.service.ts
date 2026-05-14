@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { PaymobProvider } from './providers/paymob.provider';
 import { FawryProvider } from './providers/fawry.provider';
 import { NotificationService } from '../notification/notification.service';
@@ -56,11 +56,13 @@ export class PaymentService {
         }
 
         // ─── Extract transaction ID based on gateway ───────────────
+        // ─── FIXED: بيدور على obj.id أو obj.order.id ──────────────
         const transactionId = gateway === 'paymob'
-            ? payload?.obj?.id?.toString()
+            ? (payload?.obj?.id ?? payload?.obj?.order?.id)?.toString()
             : payload?.referenceNumber;
 
         if (!transactionId) {
+            this.logger.warn('[WEBHOOK] No transaction ID found in payload');
             return { message: 'No transaction ID' };
         }
 
@@ -71,7 +73,10 @@ export class PaymentService {
 
         if (!result.paid) {
             // ─── Payment failed ────────────────────────────────────
-            const order = await this.orderModel.findOne({ paymentTransactionId: transactionId });
+            const order = await this.orderModel.findOne({
+                paymentTransactionId: transactionId,
+            });
+
             if (order) {
                 await this.orderModel.findByIdAndUpdate(order._id, {
                     paymentStatus: PaymentStatus.FAILED,
@@ -103,6 +108,7 @@ export class PaymentService {
             return { message: 'Already processed' };
         }
 
+        // ─── Update order status ──────────────────────────────────
         await this.orderModel.findByIdAndUpdate(order._id, {
             paymentStatus: PaymentStatus.PAID,
             paidAt: new Date(),
@@ -118,6 +124,10 @@ export class PaymentService {
             },
         });
 
+        // ─── ADDED: Reduce stock for each item ────────────────────
+        await this.decrementStockForOrder(order);
+
+        // ─── Notify user ──────────────────────────────────────────
         await this.notificationService.create({
             user: order.user.toString(),
             type: 'order_confirmed',
@@ -138,6 +148,8 @@ export class PaymentService {
             _id: orderId,
             user: userId,
             paymentStatus: { $in: [PaymentStatus.PENDING, PaymentStatus.FAILED] },
+            // ─── ADDED: COD مش قابل للـ retry ────────────────────
+            paymentMethod: { $ne: PaymentMethod.COD },
         });
 
         if (!order) throw new NotFoundException('Order not found or payment not retryable');
@@ -148,5 +160,26 @@ export class PaymentService {
             message: 'Payment initiated',
             paymentUrl: result.paymentUrl,
         };
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // PRIVATE: Decrement stock after payment success
+    // ════════════════════════════════════════════════════════════════
+    // ─── NOTE: الـ stock بيتقلل هنا فقط للـ online payments ────────
+    // ─── لأن الـ COD بيتقلل في OrderService.createOrder ────────────
+    private async decrementStockForOrder(order: any) {
+        try {
+            for (const item of order.items ?? []) {
+                await this.orderModel.db
+                    .collection('products')
+                    .updateOne(
+                        { _id: new Types.ObjectId(item.product.toString()) },
+                        { $inc: { stock: -item.quantity } },
+                    );
+            }
+            this.logger.log(`[WEBHOOK] Stock decremented for order ${order.orderNumber}`);
+        } catch (err) {
+            this.logger.error(`[WEBHOOK] Stock decrement failed: ${err.message}`);
+        }
     }
 }

@@ -280,7 +280,7 @@ export class BrandService {
 
     await this.notificationService.createBulk(adminIds, {
       type: NotificationTypeEnum.GENERAL,
-      title: '🆕 New Brand Request',
+      title: 'New Brand Request',
       body: `${requester.name || 'A user'} submitted a request for brand "${brandName}"`,
       data: { brandName, requestedBy: requester._id?.toString() },
     });

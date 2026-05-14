@@ -7,6 +7,7 @@ import { Types } from 'mongoose';
 import { ProductRepository } from '../../models/product/product.repository';
 import { StockLogRepository } from '../../models/stock-log/stock-log.repository';
 import { NotificationService } from '../notification/notification.service';
+import { UserRepository } from '../../models/common/user.repository';
 import {
     StockChangeReason,
 } from '../../models/stock-log/stock-log.schema';
@@ -21,6 +22,7 @@ export class InventoryService {
         private readonly productRepository: ProductRepository,
         private readonly stockLogRepository: StockLogRepository,
         private readonly notificationService: NotificationService,
+        private readonly userRepository: UserRepository,
     ) { }
 
     // ════════════════════════════════════════════════════════════════
@@ -246,34 +248,44 @@ export class InventoryService {
 
     // ─── Private Helpers ──────────────────────────────────────────
     private async sendLowStockAlert(product: any, stock: number) {
-        // ─── In-app notification to Admin ────────────────────────
-        await this.notificationService.create({
-            user: 'ADMIN', // يتبعت للـ admin — عدّل لو عندك admin ID ثابت
-            type: 'stock_alert',
-            title: '⚠️ Low Stock Alert',
-            body: `"${product.name}" has only ${stock} unit(s) left (SKU: ${product.sku})`,
-            data: {
+        await this.notifyAdmins(
+            '⚠️ Low Stock Alert',
+            `"${product.name}" has only ${stock} unit(s) left (SKU: ${product.sku})`,
+            {
                 productId: product._id.toString(),
                 productName: product.name,
                 sku: product.sku,
                 stock,
                 threshold: LOW_STOCK_THRESHOLD,
             },
-        });
+        );
     }
 
     private async sendOutOfStockAlert(product: any) {
-        await this.notificationService.create({
-            user: 'ADMIN',
-            type: 'stock_alert',
-            title: '🚫 Out of Stock',
-            body: `"${product.name}" is now out of stock (SKU: ${product.sku})`,
-            data: {
+        await this.notifyAdmins(
+            '🚫 Out of Stock',
+            `"${product.name}" is now out of stock (SKU: ${product.sku})`,
+            {
                 productId: product._id.toString(),
                 productName: product.name,
                 sku: product.sku,
                 stock: 0,
             },
-        });
+        );
+    }
+
+    private async notifyAdmins(title: string, body: string, data: Record<string, any>) {
+        try {
+            const admins = await this.userRepository.findAll({ role: 'admin' });
+            const adminIds = admins.map((a: any) => a._id.toString());
+            if (!adminIds.length) return;
+
+            await this.notificationService.createBulk(adminIds, {
+                type: 'stock_alert',
+                title,
+                body,
+                data,
+            });
+        } catch { /* silent */ }
     }
 }
