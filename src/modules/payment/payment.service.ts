@@ -55,8 +55,7 @@ export class PaymentService {
             }
         }
 
-        // ─── Extract transaction ID based on gateway ───────────────
-        // ─── FIXED: بيدور على obj.id أو obj.order.id ──────────────
+
         const transactionId = gateway === 'paymob'
             ? (payload?.obj?.id ?? payload?.obj?.order?.id)?.toString()
             : payload?.referenceNumber;
@@ -72,9 +71,11 @@ export class PaymentService {
             : await this.fawryProvider.verifyPayment(transactionId);
 
         if (!result.paid) {
-            // ─── Payment failed ────────────────────────────────────
             const order = await this.orderModel.findOne({
-                paymentTransactionId: transactionId,
+                $or: [
+                    { paymentTransactionId: transactionId },
+                    { _id: Types.ObjectId.isValid(transactionId) ? new Types.ObjectId(transactionId) : null },
+                ],
             });
 
             if (order) {
@@ -85,7 +86,7 @@ export class PaymentService {
                 await this.notificationService.create({
                     user: order.user.toString(),
                     type: 'general',
-                    title: 'Payment Failed ❌',
+                    title: 'Payment Failed ',
                     body: `Payment for order #${order.orderNumber} failed. Please retry.`,
                     data: { orderId: order._id.toString() },
                 });
@@ -95,7 +96,10 @@ export class PaymentService {
 
         // ─── Payment success ──────────────────────────────────────
         const order = await this.orderModel.findOne({
-            paymentTransactionId: transactionId,
+            $or: [
+                { paymentTransactionId: transactionId },
+                { _id: Types.ObjectId.isValid(transactionId) ? new Types.ObjectId(transactionId) : null },
+            ],
         });
 
         if (!order) {
@@ -131,7 +135,7 @@ export class PaymentService {
         await this.notificationService.create({
             user: order.user.toString(),
             type: 'order_confirmed',
-            title: 'Payment Confirmed ✅',
+            title: 'Payment Confirmed ',
             body: `Payment for order #${order.orderNumber} confirmed.`,
             data: { orderId: order._id.toString() },
         });
