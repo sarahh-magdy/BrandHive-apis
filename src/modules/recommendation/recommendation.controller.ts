@@ -1,18 +1,13 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { RecommendationService } from './recommendation.service';
+import { User } from '@common/decorators/user.decorator';
 
 @Controller('recommendation')
 export class RecommendationController {
+  constructor(private readonly recommendationService: RecommendationService) {}
 
-  constructor(
-    private readonly recommendationService: RecommendationService,
-  ) {}
-
-  @Get(':userId')
-  async getRecommendations(
-    @Param('userId') userId: string,
-  ) {
-
-    return await this.recommendationService.getRecommendations(userId);
+  @Get()
+  async getRecommendations(@User() user: any) {
+    return this.recommendationService.getRecommendations(user._id.toString());
   }
 }

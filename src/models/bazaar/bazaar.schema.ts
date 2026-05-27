@@ -8,13 +8,14 @@ export class Bazaar {
     readonly _id: Types.ObjectId;
 
     // ─── One bazaar per seller ────────────────────────────────────
-    @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true, unique: true })
+    @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
     seller: Types.ObjectId;
+
 
     @Prop({ type: String, required: true, unique: true, trim: true })
     storeName: string;
 
-    @Prop({ type: String, required: true, unique: true, lowercase: true, trim: true })
+    @Prop({ type: String, required: true, lowercase: true, trim: true })
     storeSlug: string;
 
     @Prop({ type: String, default: null })

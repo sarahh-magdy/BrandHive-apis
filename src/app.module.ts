@@ -34,12 +34,13 @@ import { RecommendationModule } from '@modules/recommendation/recommendation.mod
       load: [devConfig],
       isGlobal: true,
     }),
-    MongooseModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        uri: configService.get('database').url,
-      }),
-    }),
+MongooseModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (configService: ConfigService) => ({
+    uri: configService.get('database').url,
+    tlsAllowInvalidCertificates: true,
+  }),
+}),
     UserMongoModule,
     AuthModule,
     ProductModule,

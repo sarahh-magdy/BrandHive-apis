@@ -12,7 +12,7 @@ export class Coupon {
   readonly _id: Types.ObjectId;
 
   // ─── Code ──────────────────────────────────────────────────────
-  @Prop({ type: String, required: true, unique: true, uppercase: true, trim: true })
+  @Prop({ type: String, required: true, uppercase: true, trim: true })
   code: string;
 
   @Prop({ type: String, default: null })
