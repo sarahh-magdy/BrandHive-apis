@@ -14,11 +14,11 @@ export class RecommendationController {
   }
 
   // Similar products لأي product (public)
-  @Public()
-  @Get('similar/:productId')
-  async getSimilarProducts(@Param('productId') productId: string) {
-    return this.recommendationService.getSimilarProducts(productId);
-  }
+@Public()
+@Get('similar/:productId')
+async getSimilarProducts(@Param('productId') productId: string) {
+  return this.recommendationService.getSimilarProducts(productId);
+}
 
   // Trending products (public)
   @Public()
