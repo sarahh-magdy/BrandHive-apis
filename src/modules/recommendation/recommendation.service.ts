@@ -52,8 +52,12 @@ export class RecommendationService {
   }
 
   // ─── Similar Products ──────────────────────────────────────────────
-  async getSimilarProducts(productId: string) {
-    const product = await this.productModel.findById(productId).lean();
+async getSimilarProducts(productId: string) {
+  const count = await this.productModel.countDocuments({ isDeleted: false, isActive: true });
+  this.logger.log(`Total active products: ${count}`);
+  
+  const product = await this.productModel.findById(productId).lean();
+  this.logger.log(`Product found: ${JSON.stringify(product?.name)}`);
     if (!product) return [];
 
     // أول محاولة: نفس الـ category
