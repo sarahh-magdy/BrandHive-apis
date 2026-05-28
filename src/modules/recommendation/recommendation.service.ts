@@ -21,16 +21,13 @@ export class RecommendationService {
   async getRecommendations(userId: string) {
     const userObjectId = new Types.ObjectId(userId);
 
-    // جيب الـ categories والـ brands من تفاعلات الـ user
     const { categoryIds, brandIds, interactedProductIds } =
       await this.getUserPreferences(userObjectId);
 
-    // لو مفيش history → رجع trending
     if (!categoryIds.length) {
       return this.getTrending([], 12);
     }
 
-    // جيب منتجات من نفس الـ categories والـ brands
     const products = await this.productModel
       .find({
         _id: { $nin: interactedProductIds },
@@ -46,7 +43,6 @@ export class RecommendationService {
       .sort({ 'stats.averageRating': -1, viewCount: -1 })
       .limit(20);
 
-    // لو النتايج قليلة، كمّل بـ trending
     if (products.length < 6) {
       const trending = await this.getTrending(interactedProductIds, 12 - products.length);
       return [...products, ...trending];
@@ -60,28 +56,41 @@ export class RecommendationService {
     const product = await this.productModel.findById(productId).lean();
     if (!product) return [];
 
-    const effectivePrice = product.discountPrice || product.price;
-    const priceRange = effectivePrice * 0.4; // ±40%
-
-    return this.productModel
+    // أول محاولة: نفس الـ category
+    let products = await this.productModel
       .find({
         _id: { $ne: new Types.ObjectId(productId) },
         isDeleted: false,
         isActive: true,
-        $or: [
-          { category: product.category },
-          { brand: product.brand },
-          { tags: { $in: product.tags } },
-        ],
-        price: {
-          $gte: effectivePrice - priceRange,
-          $lte: effectivePrice + priceRange,
-        },
+        category: product.category,
       })
       .populate('category', 'name')
       .populate('brand', 'name logo')
       .sort({ 'stats.averageRating': -1, viewCount: -1 })
       .limit(8);
+
+    // لو النتايج أقل من 4، وسّع البحث
+    if (products.length < 4) {
+      products = await this.productModel
+        .find({
+          _id: { $ne: new Types.ObjectId(productId) },
+          isDeleted: false,
+          isActive: true,
+          $or: [
+            { category: product.category },
+            { brand: product.brand },
+            ...(product.tags?.length
+              ? [{ tags: { $in: product.tags } }]
+              : []),
+          ],
+        })
+        .populate('category', 'name')
+        .populate('brand', 'name logo')
+        .sort({ 'stats.averageRating': -1, viewCount: -1 })
+        .limit(8);
+    }
+
+    return products;
   }
 
   // ─── Trending Products ─────────────────────────────────────────────
@@ -108,7 +117,13 @@ export class RecommendationService {
     const orders = await this.orderModel
       .find({
         user: userId,
-        status: { $in: [OrderStatus.DELIVERED, OrderStatus.CONFIRMED, OrderStatus.SHIPPED] },
+        status: {
+          $in: [
+            OrderStatus.DELIVERED,
+            OrderStatus.CONFIRMED,
+            OrderStatus.SHIPPED,
+          ],
+        },
       })
       .select('items.product')
       .populate('items.product', 'category brand')
