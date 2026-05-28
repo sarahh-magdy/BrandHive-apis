@@ -52,13 +52,41 @@ export class RecommendationService {
   }
 
   // ─── Similar Products ──────────────────────────────────────────────
-async getSimilarProducts(productId: string) {
-  const count = await this.productModel.countDocuments({ isDeleted: false, isActive: true });
-  this.logger.log(`Total active products: ${count}`);
-  
-  const product = await this.productModel.findById(productId).lean();
-  this.logger.log(`Product found: ${JSON.stringify(product?.name)}`);
-    if (!product) return [];
+  async getSimilarProducts(productId: string) {
+    // ─── DEBUG ────────────────────────────────────────────────────
+    this.logger.log(`Looking for productId: ${productId}`);
+
+    const count = await this.productModel.countDocuments({ isDeleted: false, isActive: true });
+    this.logger.log(`Total active products: ${count}`);
+
+    // جيب 3 products عشان نشوف شكل الـ IDs
+    const samples = await this.productModel.find({}).limit(3).lean();
+    this.logger.log(`Sample IDs: ${samples.map(p => p._id.toString()).join(', ')}`);
+
+    // جرب findOne بـ string
+    const byString = await this.productModel.findOne({ _id: productId }).lean();
+    this.logger.log(`findOne by string: ${byString?.name}`);
+
+    // جرب findOne بـ ObjectId
+let byObjectId: any = null;
+try {
+  byObjectId = await this.productModel.findOne({
+        _id: new Types.ObjectId(productId),
+      }).lean();
+    } catch (e) {
+      this.logger.error(`ObjectId conversion error: ${e.message}`);
+    }
+    this.logger.log(`findOne by ObjectId: ${byObjectId?.name}`);
+
+    // ─── END DEBUG ────────────────────────────────────────────────
+
+    const product = byObjectId || byString;
+    if (!product) {
+      this.logger.warn(`Product ${productId} not found`);
+      return [];
+    }
+
+    this.logger.log(`Product found: ${product.name}, category: ${product.category}`);
 
     // أول محاولة: نفس الـ category
     let products = await this.productModel
@@ -72,6 +100,8 @@ async getSimilarProducts(productId: string) {
       .populate('brand', 'name logo')
       .sort({ 'stats.averageRating': -1, viewCount: -1 })
       .limit(8);
+
+    this.logger.log(`Same category products found: ${products.length}`);
 
     // لو النتايج أقل من 4، وسّع البحث
     if (products.length < 4) {
@@ -92,6 +122,8 @@ async getSimilarProducts(productId: string) {
         .populate('brand', 'name logo')
         .sort({ 'stats.averageRating': -1, viewCount: -1 })
         .limit(8);
+
+      this.logger.log(`Expanded search products found: ${products.length}`);
     }
 
     return products;
@@ -117,7 +149,6 @@ async getSimilarProducts(productId: string) {
     const brandIds = new Set<string>();
     const interactedProductIds: Types.ObjectId[] = [];
 
-    // من الـ Orders
     const orders = await this.orderModel
       .find({
         user: userId,
@@ -143,7 +174,6 @@ async getSimilarProducts(productId: string) {
       }
     }
 
-    // من الـ Cart
     const cart = await this.cartModel
       .findOne({ user: userId })
       .select('items.product')
@@ -160,7 +190,6 @@ async getSimilarProducts(productId: string) {
       }
     }
 
-    // من الـ Wishlist
     const wishlist = await this.wishlistModel
       .findOne({ user: userId })
       .select('items.product')
