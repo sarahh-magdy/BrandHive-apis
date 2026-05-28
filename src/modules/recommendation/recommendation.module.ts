@@ -10,7 +10,7 @@ import { Wishlist, WishlistSchema } from '../../models/wishlist/wishlist.schema'
 @Module({
   imports: [
     MongooseModule.forFeature([
-      { name: Product.name, schema: ProductSchema },
+{ name: 'Product', schema: ProductSchema, collection: 'products' },
       { name: Order.name, schema: OrderSchema },
       { name: Cart.name, schema: CartSchema },
       { name: Wishlist.name, schema: WishlistSchema },
