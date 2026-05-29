@@ -14,6 +14,7 @@ import { CloudinaryService } from '../../config/cloudinary/cloudinary.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { GetProductsDto } from './dto/get-products.dto';
+import { AiService } from 'src/ai/ai.service';
 
 @Injectable()
 export class ProductService {
@@ -24,6 +25,7 @@ export class ProductService {
     private readonly productFactoryService: ProductFactoryService,
     private readonly brandService: BrandService,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly aiService: AiService, 
   ) { }
 
   // ─── Create ───────────────────────────────────────────────────
@@ -206,6 +208,27 @@ export class ProductService {
       { new: true },
     );
   }
+  // ─── AI Recommendations ───────────────────────────────────────
+
+async getAiRecommendations(categories: string[]) {
+  return this.aiService.getRecommendations(categories);
+}
+
+async getSimilarProducts(productId: string) {
+  return this.aiService.getSimilarProducts(productId);
+}
+
+async getBehavioralRecommendations(data: any) {
+  return this.aiService.getBehavioralRecommendations(data);
+}
+
+async trackUserEvent(eventData: any) {
+  return this.aiService.trackEvent(eventData);
+}
+
+async getAiTrending(category?: string) {
+  return this.aiService.getTrending(category);
+}
 
   // ─── Home page feeds ──────────────────────────────────────────
 

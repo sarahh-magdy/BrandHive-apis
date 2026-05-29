@@ -143,6 +143,32 @@ export class ProductController {
       meta: result.meta,
     };
   }
+  // ─── AI Endpoints ─────────────────────────────────────────────
+
+@Post('recommendations')
+async getRecommendations(@Body('categories') categories: string[]) {
+  return this.productService.getAiRecommendations(categories);
+}
+
+@Get('similar/:id')
+async getSimilar(@Param('id') id: string) {
+  return this.productService.getSimilarProducts(id);
+}
+
+@Get('ai-trending')
+async getAiTrending(@Query('category') category?: string) {
+  return this.productService.getAiTrending(category);
+}
+
+@Post('behavioral/recommend')
+async behavioralRecommend(@Body() body: any) {
+  return this.productService.getBehavioralRecommendations(body);
+}
+
+@Post('behavioral/track')
+async trackEvent(@Body() body: any) {
+  return this.productService.trackUserEvent(body);
+}
 
   @Get(':id')
   @Auth(['Admin', 'Seller', 'Customer'])

@@ -21,11 +21,13 @@ import { UserMongoModule } from '../../shared/modules/user-mongo.module';
 // ─── CHANGED: أضفنا CloudinaryModule ──────────────────────────────
 import { CloudinaryModule } from '../../config/cloudinary/cloudinary.module';
 import { NotificationModule } from '../notification/notification.module';
+import { AiModule } from 'src/ai/ai.module';
 @Module({
   imports: [
     UserMongoModule,
     JwtModule,
     NotificationModule,
+    AiModule,
     // ─── CHANGED: CloudinaryModule بدل MulterModule ───────────────
     CloudinaryModule,
     MongooseModule.forFeature([
