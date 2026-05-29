@@ -28,6 +28,7 @@ import { ReviewModule } from '@modules/review/review.module';
 import { SellerModule } from '@modules/seller/seller.module';
 import { SupportModule } from '@modules/support/support.module';
 import { RecommendationModule } from '@modules/recommendation/recommendation.module';
+import { AiModule } from './ai/ai.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -61,6 +62,7 @@ MongooseModule.forRootAsync({
     SellerModule,
     SupportModule,
     RecommendationModule,
+    AiModule,
 
 
   ],
