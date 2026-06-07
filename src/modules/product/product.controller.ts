@@ -170,6 +170,11 @@ async trackEvent(@Body() body: any) {
   return this.productService.trackUserEvent(body);
 }
 
+@Post('cart/cross-sell')
+async cartCrossSell(@Body() body: { cart_product_ids: string[]; top_n?: number }) {
+  return this.productService.getCartCrossSell(body.cart_product_ids, body.top_n);
+}
+
   @Get(':id')
   @Auth(['Admin', 'Seller', 'Customer'])
   async findOne(@Param('id') id: string) {

@@ -59,4 +59,14 @@ constructor(private configService: ConfigService) {
     if (!res.ok) throw new HttpException('AI service error', res.status);
     return res.json();
   }
+  
+  async getCartCrossSell(cartProductIds: string[], topN = 8) {
+  const res = await fetch(`${this.aiBaseUrl}/api/cart/cross-sell`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cart_product_ids: cartProductIds, top_n: topN }),
+  });
+  if (!res.ok) throw new HttpException('AI service error', res.status);
+  return res.json();
+}
 }

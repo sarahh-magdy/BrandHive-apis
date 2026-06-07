@@ -230,6 +230,9 @@ async getAiTrending(category?: string) {
   return this.aiService.getTrending(category);
 }
 
+async getCartCrossSell(cartProductIds: string[], topN?: number) {
+  return this.aiService.getCartCrossSell(cartProductIds, topN);
+}
   // ─── Home page feeds ──────────────────────────────────────────
 
   async getNewArrivals(limit = 20) {
