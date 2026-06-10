@@ -7,6 +7,8 @@ import dns from 'dns';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'; 
 
 async function bootstrap() {
+    console.log('🔍 DB_URL =>', process.env.DB_URL);  // أضف هنا
+
   dns.setDefaultResultOrder('ipv4first');
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
