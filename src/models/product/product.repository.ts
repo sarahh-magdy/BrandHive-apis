@@ -241,4 +241,11 @@ export class ProductRepository extends AbstractRepository<Product> {
       .lean()
       .exec();
   }
+
+  async findByIds(ids: Types.ObjectId[]) {
+  return this.productModel
+    .find({ _id: { $in: ids }, isDeleted: false }, { images: 1 })
+    .lean()
+    .exec();
+}
 }

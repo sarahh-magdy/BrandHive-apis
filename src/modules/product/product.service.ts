@@ -215,7 +215,24 @@ async getAiRecommendations(categories: string[]) {
 }
 
 async getSimilarProducts(productId: string) {
-  return this.aiService.getSimilarProducts(productId);
+  const aiResponse = await this.aiService.getSimilarProducts(productId);
+
+  if (!aiResponse?.similar?.length) return aiResponse;
+
+  const ids = aiResponse.similar.map((p: any) => new Types.ObjectId(p.id));
+  const products = await this.productRepository.findByIds(ids);
+
+  const imageMap = new Map(
+    products.map((p: any) => [p._id.toString(), p.images?.[0]?.url ?? null])
+  );
+
+  return {
+    ...aiResponse,
+    similar: aiResponse.similar.map((p: any) => ({
+      ...p,
+      mainImage: imageMap.get(p.id) ?? null,
+    })),
+  };
 }
 
 async getBehavioralRecommendations(data: any) {
