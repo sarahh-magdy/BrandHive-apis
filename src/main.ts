@@ -14,7 +14,6 @@ process.on('unhandledRejection', (reason) => {
   console.error('💥 Unhandled Rejection:', reason);
 });
 async function bootstrap() {
-    console.log('🔍 DB_URL =>', process.env.DB_URL);  
   dns.setDefaultResultOrder('ipv4first');
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -48,7 +47,6 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
 
   console.log(`Server running on port: ${port}`);
-  console.log("Sarah");
 
 
   

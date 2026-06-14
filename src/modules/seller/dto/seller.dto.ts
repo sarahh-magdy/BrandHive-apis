@@ -1,10 +1,23 @@
-// ─── seller-product.dto.ts ────────────────────────────────────────
 import { Type } from 'class-transformer';
 import {
-    IsArray, IsBoolean, IsInt, IsMongoId, IsNotEmpty,
-    IsNumber, IsOptional, IsString, Max, Min, MinLength, ValidateNested,
+    IsArray,
+    IsBoolean,
+    IsEnum,
+    IsInt,
+    IsMongoId,
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsString,
+    Max,
+    Min,
+    MinLength,
+    ValidateNested,
 } from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
+import { OrderStatus } from '../../../models/order/order.schema';
+
+// ─── Product DTOs ─────────────────────────────────────────────────
 
 class DimensionsDto {
     @IsNumber() @Min(0) length: number;
@@ -36,9 +49,7 @@ export class GetSellerProductsDto {
     @IsOptional() @Type(() => Boolean) @IsBoolean() lowStock?: boolean;
 }
 
-// ─── seller-order.dto.ts ──────────────────────────────────────────
-import { IsEnum } from 'class-validator';
-import { OrderStatus } from '../../../models/order/order.schema';
+// ─── Order DTOs ───────────────────────────────────────────────────
 
 export class GetSellerOrdersDto {
     @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
@@ -48,7 +59,8 @@ export class GetSellerOrdersDto {
     @IsOptional() @IsString() dateTo?: string;
 }
 
-// ─── seller-analytics.dto.ts ──────────────────────────────────────
+// ─── Analytics DTOs ───────────────────────────────────────────────
+
 export enum SellerAnalyticsPeriod {
     WEEK = 'week',
     MONTH = 'month',
@@ -60,7 +72,8 @@ export class SellerAnalyticsDto {
     period?: SellerAnalyticsPeriod = SellerAnalyticsPeriod.MONTH;
 }
 
-// ─── bazaar.dto.ts ────────────────────────────────────────────────
+// ─── Bazaar DTOs ──────────────────────────────────────────────────
+
 export class UpdateBazaarDto {
     @IsOptional() @IsString() @MinLength(2) storeName?: string;
     @IsOptional() @IsString() description?: string;
@@ -68,4 +81,22 @@ export class UpdateBazaarDto {
     @IsOptional() @IsString() whatsappLink?: string;
     @IsOptional() @IsString() website?: string;
     @IsOptional() @IsArray() @IsMongoId({ each: true }) featuredCategories?: string[];
+}
+
+export class CreateBazaarDto {
+    @IsString() @IsNotEmpty() @MinLength(2) storeName: string;
+    @IsOptional() @IsString() description?: string;
+    @IsOptional() @IsString() phone?: string;
+    @IsOptional() @IsString() whatsappLink?: string;
+    @IsOptional() @IsString() website?: string;
+    @IsOptional() @IsArray() @IsMongoId({ each: true }) featuredCategories?: string[];
+}
+
+export class AdminCreateBazaarDto extends CreateBazaarDto {
+    @IsMongoId() sellerId: string;
+}
+
+export class ReviewBazaarDto {
+    @IsEnum(['approved', 'rejected']) status: 'approved' | 'rejected';
+    @IsOptional() @IsString() rejectionReason?: string;
 }

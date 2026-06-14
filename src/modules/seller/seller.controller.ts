@@ -28,6 +28,7 @@ import { RolesGuard } from '@common/guards/roles.guard';
 import { User } from '@common/decorators/user.decorator';
 import { Public } from '@common/decorators/public.decorator';
 import { multerMemoryConfig } from '../../config/cloudinary/multer-memory.config';
+import { CreateBazaarDto, AdminCreateBazaarDto, ReviewBazaarDto } from './dto/seller.dto';
 
 @Controller('seller')
 @UseGuards(AuthGuard, RolesGuard)
@@ -230,4 +231,50 @@ export class SellerController {
     ) {
         return this.sellerService.getBazaarBySlug(slug, +page, +limit);
     }
+    // seller.controller.ts
+
+// ─── Seller: يطلب إنشاء Bazaar ───────────────────────────────────
+@Post('bazaar')
+@Auth(['Seller'])
+@UseInterceptors(
+    FileFieldsInterceptor(
+        [{ name: 'logo', maxCount: 1 }, { name: 'banner', maxCount: 1 }],
+        multerMemoryConfig,
+    ),
+)
+createBazaarRequest(
+    @User() user: any,
+    @Body() dto: CreateBazaarDto,
+    @UploadedFiles() files: { logo?: Express.Multer.File[]; banner?: Express.Multer.File[] },
+) {
+    return this.sellerService.createBazaarRequest(
+        user._id, dto, files?.logo?.[0], files?.banner?.[0],
+    );
+}
+
+// ─── Admin: ينشئ Bazaar مباشرة ────────────────────────────────────
+@Post('bazaar/admin/create')
+@Auth(['Admin'])
+@UseInterceptors(
+    FileFieldsInterceptor(
+        [{ name: 'logo', maxCount: 1 }, { name: 'banner', maxCount: 1 }],
+        multerMemoryConfig,
+    ),
+)
+adminCreateBazaar(
+    @Body() dto: AdminCreateBazaarDto,
+    @UploadedFiles() files: { logo?: Express.Multer.File[]; banner?: Express.Multer.File[] },
+) {
+    return this.sellerService.adminCreateBazaar(dto, files?.logo?.[0], files?.banner?.[0]);
+}
+
+// ─── Admin: يوافق أو يرفض ─────────────────────────────────────────
+@Patch('bazaar/admin/:sellerId/review')
+@Auth(['Admin'])
+reviewBazaarRequest(
+    @Param('sellerId') sellerId: string,
+    @Body() dto: ReviewBazaarDto,
+) {
+    return this.sellerService.reviewBazaarRequest(sellerId, dto);
+}
 }

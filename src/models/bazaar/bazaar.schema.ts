@@ -1,6 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { SchemaTypes, Types } from 'mongoose';
 
+export enum BazaarStatus {
+    PENDING = 'pending',
+    APPROVED = 'approved',
+    REJECTED = 'rejected',
+}
+
 // ─── Bazaar = Seller's Store Page ─────────────────────────────────
 @Schema({ timestamps: true })
 export class Bazaar {
@@ -10,7 +16,6 @@ export class Bazaar {
     // ─── One bazaar per seller ────────────────────────────────────
     @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
     seller: Types.ObjectId;
-
 
     @Prop({ type: String, required: true, unique: true, trim: true })
     storeName: string;
@@ -51,6 +56,17 @@ export class Bazaar {
     @Prop({ type: Boolean, default: true })
     isActive: boolean;
 
+    // ─── Approval status ──────────────────────────────────────────
+    @Prop({
+        type: String,
+        enum: BazaarStatus,
+        default: BazaarStatus.PENDING,
+    })
+    status: BazaarStatus;
+
+    @Prop({ type: String, default: null })
+    rejectionReason: string | null;
+
     // ─── Stats ────────────────────────────────────────────────────
     @Prop({
         type: {
@@ -83,3 +99,4 @@ BazaarSchema.index({ seller: 1 }, { unique: true });
 BazaarSchema.index({ storeSlug: 1 }, { unique: true });
 BazaarSchema.index({ storeName: 'text' });
 BazaarSchema.index({ isActive: 1 });
+BazaarSchema.index({ status: 1 });

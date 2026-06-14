@@ -7,7 +7,6 @@ private readonly aiBaseUrl: string;
 
 constructor(private configService: ConfigService) {
   const url = this.configService.get<string>('AI_BASE_URL');
-  console.log('🔍 AI_BASE_URL =', url); // ← أضف ده
   this.aiBaseUrl = this.configService.getOrThrow<string>('AI_BASE_URL');
 }
   // Category-based recommendations

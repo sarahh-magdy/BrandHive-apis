@@ -26,8 +26,12 @@ import {
     SellerAnalyticsDto,
     SellerAnalyticsPeriod,
     UpdateBazaarDto,
+    CreateBazaarDto,
+    AdminCreateBazaarDto,
+    ReviewBazaarDto,
 } from './dto/seller.dto';
 import { StockChangeReason } from '../../models/stock-log/stock-log.schema';
+import { BazaarStatus } from '../../models/bazaar/bazaar.schema';
 
 @Injectable()
 export class SellerService {
@@ -41,7 +45,6 @@ export class SellerService {
         private readonly productFactory: ProductFactoryService,
         private readonly notificationService: NotificationService,
         private readonly userRepository: UserRepository,
-
     ) { }
 
     // ════════════════════════════════════════════════════════════════
@@ -109,7 +112,6 @@ export class SellerService {
                 { $match: { product: { $in: productIds }, isVisible: true } },
                 { $group: { _id: null, avg: { $avg: '$rating' } } },
             ]) ?? [],
-            // ─── ADDED: engagement stats ───────────────────────────
             this.productRepository['productModel']?.aggregate([
                 { $match: { seller: sellerObjId, isDeleted: false } },
                 {
@@ -144,7 +146,6 @@ export class SellerService {
                     total: totalReviews,
                     averageRating: Math.round((avgRatingResult[0]?.avg ?? 0) * 10) / 10,
                 },
-                // ─── ADDED ─────────────────────────────────────────
                 engagement: {
                     totalViews: engagementResult[0]?.totalViews ?? 0,
                     totalCartAdds: engagementResult[0]?.totalCartAdds ?? 0,
@@ -506,57 +507,193 @@ export class SellerService {
     // ════════════════════════════════════════════════════════════════
     // BAZAAR
     // ════════════════════════════════════════════════════════════════
+
+    // ─── Seller: يشوف بازاره ──────────────────────────────────────
     async getMyBazaar(sellerId: string) {
-        let bazaar = await this.bazaarRepository.getOne({
+        const bazaar = await this.bazaarRepository.getOne({
             seller: new Types.ObjectId(sellerId),
         });
+        if (!bazaar) throw new NotFoundException('No bazaar found. Submit a request first.');
+        return { data: bazaar };
+    }
 
-        if (!bazaar) {
-            bazaar = await this.bazaarRepository.create({
-                seller: new Types.ObjectId(sellerId),
-                storeName: `Store-${sellerId.slice(-6)}`,
-                storeSlug: `store-${sellerId.slice(-6).toLowerCase()}`,
-                description: null,
-                phone: null,
-                whatsappLink: null,
-                website: null,
-                logo: null,
-                banner: null,
-                featuredCategories: [],
-                isActive: true,
-                stats: {
-                    totalProducts: 0,
-                    totalOrders: 0,
-                    totalRevenue: 0,
-                    averageRating: 0,
-                    totalReviews: 0,
-                },
-            } as any);
+    // ─── Seller: يقدّم طلب إنشاء Bazaar (status = pending) ────────
+    async createBazaarRequest(
+        sellerId: string,
+        dto: CreateBazaarDto,
+        logoFile?: Express.Multer.File,
+        bannerFile?: Express.Multer.File,
+    ) {
+        const existing = await this.bazaarRepository.getOne({
+            seller: new Types.ObjectId(sellerId),
+        });
+        if (existing) throw new ConflictException('You already have a bazaar or a pending request');
 
-            // ─── Notify seller ────────────────────────────────────────
-            this.notificationService.create({
-                user: sellerId,
+        const slug = slugify(dto.storeName, { lower: true, trim: true, replacement: '-' });
+        const conflict = await this.bazaarRepository.getOne({ storeSlug: slug });
+        if (conflict) throw new ConflictException('Store name already taken');
+
+        let logo: { url: string; publicId: string } | null = null;
+        let banner: { url: string; publicId: string } | null = null;
+
+        if (logoFile) {
+            const uploaded = await this.cloudinaryService.uploadImage(logoFile, 'bazaar/logos');
+            logo = { url: uploaded.url, publicId: uploaded.publicId };
+        }
+        if (bannerFile) {
+            const uploaded = await this.cloudinaryService.uploadImage(bannerFile, 'bazaar/banners');
+            banner = { url: uploaded.url, publicId: uploaded.publicId };
+        }
+
+        const bazaar = await this.bazaarRepository.create({
+            seller: new Types.ObjectId(sellerId),
+            storeName: dto.storeName,
+            storeSlug: slug,
+            description: dto.description ?? null,
+            phone: dto.phone ?? null,
+            whatsappLink: dto.whatsappLink ?? null,
+            website: dto.website ?? null,
+            logo,
+            banner,
+            featuredCategories: (dto.featuredCategories ?? []).map((id) => new Types.ObjectId(id)),
+            isActive: false,
+            status: BazaarStatus.PENDING,
+            rejectionReason: null,
+            stats: {
+                totalProducts: 0, totalOrders: 0,
+                totalRevenue: 0, averageRating: 0, totalReviews: 0,
+            },
+        } as any);
+
+        this.notificationService.create({
+            user: sellerId,
+            type: 'bazaar_request',
+            title: '🕐 Bazaar Request Submitted',
+            body: "Your bazaar request is under review. We'll notify you once approved.",
+            data: { bazaarId: (bazaar as any)._id?.toString() },
+        }).catch(() => null);
+
+        return { message: 'Bazaar request submitted, pending admin approval', data: bazaar };
+    }
+
+    // ─── Admin: ينشئ Bazaar مباشرة لـ seller (status = approved) ──
+    async adminCreateBazaar(
+        dto: AdminCreateBazaarDto,
+        logoFile?: Express.Multer.File,
+        bannerFile?: Express.Multer.File,
+    ) {
+        const existing = await this.bazaarRepository.getOne({
+            seller: new Types.ObjectId(dto.sellerId),
+        });
+        if (existing) throw new ConflictException('This seller already has a bazaar');
+
+        const slug = slugify(dto.storeName, { lower: true, trim: true, replacement: '-' });
+        const conflict = await this.bazaarRepository.getOne({ storeSlug: slug });
+        if (conflict) throw new ConflictException('Store name already taken');
+
+        let logo: { url: string; publicId: string } | null = null;
+        let banner: { url: string; publicId: string } | null = null;
+
+        if (logoFile) {
+            const uploaded = await this.cloudinaryService.uploadImage(logoFile, 'bazaar/logos');
+            logo = { url: uploaded.url, publicId: uploaded.publicId };
+        }
+        if (bannerFile) {
+            const uploaded = await this.cloudinaryService.uploadImage(bannerFile, 'bazaar/banners');
+            banner = { url: uploaded.url, publicId: uploaded.publicId };
+        }
+
+        const bazaar = await this.bazaarRepository.create({
+            seller: new Types.ObjectId(dto.sellerId),
+            storeName: dto.storeName,
+            storeSlug: slug,
+            description: dto.description ?? null,
+            phone: dto.phone ?? null,
+            whatsappLink: dto.whatsappLink ?? null,
+            website: dto.website ?? null,
+            logo,
+            banner,
+            featuredCategories: (dto.featuredCategories ?? []).map((id) => new Types.ObjectId(id)),
+            isActive: true,
+            status: BazaarStatus.APPROVED,
+            rejectionReason: null,
+            stats: {
+                totalProducts: 0, totalOrders: 0,
+                totalRevenue: 0, averageRating: 0, totalReviews: 0,
+            },
+        } as any);
+
+        this.notificationService.create({
+            user: dto.sellerId,
+            type: 'bazaar_approved',
+            title: '✅ Your Bazaar is Live!',
+            body: 'An admin has created your bazaar. Start adding products!',
+            data: { bazaarId: (bazaar as any)._id?.toString() },
+        }).catch(() => null);
+
+        // بلّغ الـ customers
+        this.userRepository.findAllCustomers().then((customers) => {
+            const ids = customers.map((c: any) => c._id.toString());
+            return this.notificationService.createBulk(ids, {
                 type: 'bazaar_new',
-                title: '🏪 Your Bazaar is Ready!',
-                body: 'Your store has been created. Start adding products and customizing your store.',
-                data: { bazaarId: (bazaar as any)._id?.toString() },
-            }).catch(() => null);
+                title: '🏪 New Store Just Opened!',
+                body: 'A new store is now available on Brand Hive. Check it out!',
+                data: { storeSlug: (bazaar as any).storeSlug },
+            });
+        }).catch(() => null);
 
-            // ─── Notify all customers async ───────────────────────────
+        return { message: 'Bazaar created and approved successfully', data: bazaar };
+    }
+
+    // ─── Admin: يوافق أو يرفض طلب الـ Seller ─────────────────────
+    async reviewBazaarRequest(sellerId: string, dto: ReviewBazaarDto) {
+        const bazaar = await this.bazaarRepository.getOne({
+            seller: new Types.ObjectId(sellerId),
+            status: BazaarStatus.PENDING,
+        });
+        if (!bazaar) throw new NotFoundException('No pending bazaar request for this seller');
+
+        const isApproved = dto.status === 'approved';
+
+        const updated = await this.bazaarRepository.updateOne(
+            { seller: new Types.ObjectId(sellerId) },
+            {
+                status: isApproved ? BazaarStatus.APPROVED : BazaarStatus.REJECTED,
+                isActive: isApproved,
+                rejectionReason: dto.rejectionReason ?? null,
+            },
+            { new: true },
+        );
+
+        this.notificationService.create({
+            user: sellerId,
+            type: isApproved ? 'bazaar_approved' : 'bazaar_rejected',
+            title: isApproved ? '✅ Bazaar Approved!' : '❌ Bazaar Request Rejected',
+            body: isApproved
+                ? 'Your bazaar is now live! Start adding products.'
+                : `Your bazaar request was rejected. ${dto.rejectionReason ?? ''}`.trim(),
+            data: { bazaarId: (bazaar as any)._id?.toString() },
+        }).catch(() => null);
+
+        if (isApproved) {
             this.userRepository.findAllCustomers().then((customers) => {
-                const customerIds = customers.map((c: any) => c._id.toString());
-                return this.notificationService.createBulk(customerIds, {
+                const ids = customers.map((c: any) => c._id.toString());
+                return this.notificationService.createBulk(ids, {
                     type: 'bazaar_new',
                     title: '🏪 New Store Just Opened!',
                     body: 'A new store is now available on Brand Hive. Check it out!',
-                    data: { storeSlug: (bazaar as any).storeSlug },
+                    data: { storeSlug: (updated as any).storeSlug },
                 });
             }).catch(() => null);
         }
 
-        return { data: bazaar };
+        return {
+            message: isApproved ? 'Bazaar approved successfully' : 'Bazaar request rejected',
+            data: updated,
+        };
     }
 
+    // ─── Seller: يعدّل بازاره ─────────────────────────────────────
     async updateBazaar(
         sellerId: string,
         dto: UpdateBazaarDto,
@@ -672,7 +809,6 @@ export class SellerService {
     // ─── Admin: Get all bazaars ───────────────────────────────────
     async getAllBazaarsAdmin(search: string, page = 1, limit = 10) {
         const skip = (page - 1) * limit;
-        // ─── Admin يشوف كل الـ bazaars حتى لو isActive = false ──
         const filter: Record<string, any> = {};
 
         if (search) {
@@ -690,10 +826,8 @@ export class SellerService {
         return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };
     }
 
-    // ─── Send notification to all bazaar followers ────────────────
+    // ─── Seller: يبعت notification للـ followers ──────────────────
     async notifyBazaarFollowers(sellerId: string, title: string, body: string) {
-        // placeholder — لو عندك follow system هتجيب الـ followers هنا
-        // دلوقتي بنبعت للـ seller نفسه
         await this.notificationService.create({
             user: sellerId,
             type: 'bazaar_update',
