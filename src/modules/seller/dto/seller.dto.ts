@@ -20,21 +20,21 @@ import { OrderStatus } from '../../../models/order/order.schema';
 // ─── Product DTOs ─────────────────────────────────────────────────
 
 class DimensionsDto {
-    @IsNumber() @Min(0) length: number;
-    @IsNumber() @Min(0) width: number;
-    @IsNumber() @Min(0) height: number;
+    @Type(() => Number) @IsNumber() @Min(0) length: number;
+    @Type(() => Number) @IsNumber() @Min(0) width: number;
+    @Type(() => Number) @IsNumber() @Min(0) height: number;
 }
 
 export class SellerCreateProductDto {
     @IsString() @IsNotEmpty() @MinLength(2) name: string;
     @IsOptional() @IsString() description?: string;
-    @IsNumber() @Min(0) price: number;
-    @IsOptional() @IsNumber() @Min(0) discountPrice?: number;
-    @IsNumber() @Min(0) stock: number;
+    @Type(() => Number) @IsNumber() @Min(0) price: number;
+    @IsOptional() @Type(() => Number) @IsNumber() @Min(0) discountPrice?: number;
+    @Type(() => Number) @IsNumber() @Min(0) stock: number;
     @IsMongoId() category: string;
     @IsMongoId() brand: string;
     @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
-    @IsOptional() @IsNumber() @Min(0) weight?: number;
+    @IsOptional() @Type(() => Number) @IsNumber() @Min(0) weight?: number;
     @IsOptional() @ValidateNested() @Type(() => DimensionsDto) dimensions?: DimensionsDto;
 }
 
